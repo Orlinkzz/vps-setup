@@ -6,13 +6,18 @@ MSG[btn.cancel]="Batal"
 MSG[btn.yes]="Ya"
 MSG[btn.no]="Tidak"
 
+MSG[app.backtitle]="VPS Setup v%s"
+
+MSG[lang.title]="Language / Bahasa"
+MSG[lang.text]="Pilih bahasa Anda:\nChoose your language:"
+
 MSG[err.root]="Tool ini harus dijalankan sebagai root. Coba: sudo ./setup.sh"
 MSG[err.yes_preset]="--yes membutuhkan --preset (recommended, minimal, custom, atau domain)"
 MSG[err.bad_lang]="Bahasa '%s' tidak didukung (gunakan: en, id)"
 MSG[err.no_preset]="Preset tidak ditemukan: %s"
 MSG[err.cmd_failed]="Perintah gagal: %s"
-MSG[err.no_apt]="Tool ini membutuhkan apt-get (Ubuntu/Debian). Distro lain akan menyusul."
-MSG[err.os_unsupported]="Maaf, %s belum didukung. Saat ini yang didukung: Ubuntu 22.04 / 24.04 dan Debian 11 / 12. Distro Linux lain sedang direncanakan."
+MSG[err.no_apt]="Tool ini membutuhkan apt-get (Ubuntu/Debian) atau dnf (AlmaLinux/Rocky)."
+MSG[err.os_unsupported]="Maaf, %s belum didukung. Saat ini yang didukung: Ubuntu 22.04 / 24.04, Debian 11 / 12, dan AlmaLinux / Rocky 8 / 9."
 MSG[warn.os_untested]="%s belum pernah diuji dengan tool ini. Kemungkinan besar tetap jalan, tapi lanjutkan dengan hati-hati."
 MSG[warn.apt_update]="apt update melaporkan error (mungkin ada repository pihak ketiga yang rusak). Melanjutkan dengan daftar paket yang ada."
 MSG[msg.cancelled]="Dibatalkan. Tidak ada yang diubah."
@@ -89,6 +94,7 @@ MSG[hostname.set]="Hostname diatur ke %s"
 MSG[sum.hostname]="Hostname: %s"
 
 MSG[swap.ask]="Berapa besar swap yang dibuat?\n\nUkuran yang disarankan untuk server ini (RAM %s MB) sudah terpilih."
+MSG[swap.size]="%s GB"
 MSG[swap.none]="Tanpa swap"
 MSG[swap.exists]="Swap sudah aktif di server ini. Tidak ada yang perlu dilakukan."
 MSG[swap.container]="Server ini berupa container (LXC/OpenVZ) yang biasanya tidak bisa membuat swap. Dilewati."
@@ -319,6 +325,7 @@ MSG[sum.frankenphp]="FrankenPHP"
 
 MSG[note.php]="Socket PHP %s-FPM: /run/php/php%s-fpm.sock"
 MSG[note.docker]="Logout dan login kembali agar grup docker berlaku."
+MSG[note.frankenphp]="FrankenPHP sudah terpasang tapi belum berjalan: tambahkan Caddyfile di /etc/frankenphp/, lalu aktifkan dengan:  sudo systemctl enable --now frankenphp"
 
 # ============================================================= Fase 5: ops
 MSG[feat.db_backup.title]="Backup database otomatis"

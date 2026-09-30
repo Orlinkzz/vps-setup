@@ -18,7 +18,7 @@ have_safe_user() {
   if feature_selected create_user && [[ ${CFG[new_user_has_key]:-0} == 1 ]]; then
     if (( DRY_RUN )) || [[ -z ${RESULT[create_user]:-} ]]; then return 0; fi
   fi
-  for u in $(getent group sudo 2>/dev/null | cut -d: -f4 | tr ',' ' '); do
+  for u in $(getent group "$ADMIN_GROUP" 2>/dev/null | cut -d: -f4 | tr ',' ' '); do
     [[ $u == root ]] && continue
     home=$(getent passwd "$u" | cut -d: -f6)
     [[ -n $home && -s "$home/.ssh/authorized_keys" ]] && return 0
@@ -96,7 +96,7 @@ run_create_user() {
   else
     run adduser --disabled-password --gecos "" "$user"
   fi
-  run usermod -aG sudo "$user"
+  run usermod -aG "$ADMIN_GROUP" "$user"
 
   if [[ ${CFG[user_sudo]} == nopasswd ]]; then
     tmp=$(mktemp)

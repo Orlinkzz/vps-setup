@@ -44,7 +44,8 @@ run_fail2ban() {
     run dnf "${DNF_OPTS[@]}" -y install epel-release
     pkg_update
   fi
-  pkg_install fail2ban python3-systemd
+  # python3-systemd comes from EPEL; if it is missing, fail2ban still works (backend falls back).
+  pkg_install fail2ban python3-systemd || pkg_install fail2ban
 
   write_file /etc/fail2ban/jail.d/00-vps-setup.local 644 <<EOF
 # Managed by vps-setup

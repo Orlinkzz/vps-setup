@@ -23,15 +23,20 @@ fi
 
 echo "==> Rolling back vps-setup changes..."
 
-# Web server configs
+# Web server configs (Debian/Ubuntu paths, then AlmaLinux/Rocky/RHEL paths)
 for f in /etc/nginx/conf.d/00-vps-setup.conf /etc/nginx/sites-available/00-default.conf \
          /etc/nginx/sites-available/00-default-https.conf /etc/nginx/sites-enabled/00-default.conf \
-         /etc/nginx/sites-enabled/00-default-https.conf; do
+         /etc/nginx/sites-enabled/00-default-https.conf \
+         /etc/nginx/conf.d/00-default.conf /etc/nginx/conf.d/00-default-https.conf \
+         /etc/nginx/snippets/vps-setup/security-headers.conf /etc/nginx/snippets/vps-setup/deny-hidden.conf \
+         /etc/nginx/snippets/vps-setup/static-cache.conf /etc/nginx/snippets/vps-setup/proxy-params.conf; do
   rm -f "$f" 2>/dev/null; echo "  removed: $f"
 done
+rmdir /etc/nginx/snippets/vps-setup 2>/dev/null
 
 for f in /etc/apache2/conf-available/vps-setup.conf /etc/apache2/conf-enabled/vps-setup.conf \
-         /etc/apache2/sites-available/000-vps-default.conf /etc/apache2/sites-enabled/000-vps-default.conf; do
+         /etc/apache2/sites-available/000-vps-default.conf /etc/apache2/sites-enabled/000-vps-default.conf \
+         /etc/httpd/conf.d/00-vps-setup.conf /etc/httpd/conf.d/000-vps-default.conf; do
   rm -f "$f" 2>/dev/null; echo "  removed: $f"
 done
 
@@ -50,16 +55,19 @@ done
 # System tweaks
 rm -f /etc/sysctl.d/99-vps-setup.conf
 rm -f /etc/apt/apt.conf.d/20auto-upgrades /etc/apt/apt.conf.d/52vps-setup-unattended
-echo "  removed: sysctl + apt configs"
+rm -f /etc/dnf/automatic.conf
+echo "  removed: sysctl + apt/dnf configs"
 
 # Fail2ban jails
 rm -f /etc/fail2ban/jail.d/00-vps-setup.local /etc/fail2ban/jail.d/10-vps-setup-nginx.local
 rm -f /etc/fail2ban/filter.d/nginx-bad-request.conf /etc/fail2ban/filter.d/nginx-botsearch.conf
 echo "  removed: fail2ban configs"
 
-# DB tuning
+# DB tuning (Debian paths + RHEL paths)
 rm -f /etc/postgresql/*/main/conf.d/vps-setup-tuning.conf 2>/dev/null || true
+rm -f /var/lib/pgsql/data/conf.d/vps-setup-tuning.conf 2>/dev/null || true
 rm -f /etc/mysql/mysql.conf.d/vps-setup-tuning.cnf 2>/dev/null || true
+rm -f /etc/my.cnf.d/vps-setup-tuning.cnf 2>/dev/null || true
 echo "  removed: database tuning configs"
 
 # Redis

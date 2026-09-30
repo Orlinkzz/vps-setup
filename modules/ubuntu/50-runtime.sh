@@ -145,7 +145,7 @@ run_docker_runtime() {
 
   # Also add any sudo user
   local sudouser
-  sudouser=$(getent group sudo | cut -d: -f4 | tr ',' '\n' | grep -vx root | head -n 1) || true
+  sudouser=$(getent group "$ADMIN_GROUP" | cut -d: -f4 | tr ',' '\n' | grep -vx root | head -n 1) || true
   if [[ -n $sudouser ]] && ! id -nG "$sudouser" 2>/dev/null | grep -qw docker; then
     run usermod -aG docker "$sudouser"
   fi

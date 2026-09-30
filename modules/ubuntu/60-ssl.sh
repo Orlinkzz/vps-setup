@@ -67,7 +67,7 @@ site_root() {
 
 site_owner() {
   local u
-  u=$(getent group sudo | cut -d: -f4 | tr ',' '\n' | grep -vx root | head -n 1) || true
+  u=$(getent group "$ADMIN_GROUP" | cut -d: -f4 | tr ',' '\n' | grep -vx root | head -n 1) || true
   if [[ -n ${CFG[username]:-} ]] && id "${CFG[username]}" >/dev/null 2>&1; then u=${CFG[username]}; fi
   printf '%s' "${u:-root}"
 }

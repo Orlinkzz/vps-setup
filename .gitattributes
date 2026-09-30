@@ -1,0 +1,2 @@
+# Shell scripts run on Linux: always commit with LF, never CRLF.
+*.sh text eol=lf

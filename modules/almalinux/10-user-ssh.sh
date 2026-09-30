@@ -5,19 +5,8 @@
 # shellcheck source=../ubuntu/10-user-ssh.sh
 source "$ROOT_DIR/modules/ubuntu/10-user-ssh.sh"
 
-# RHEL has no sudo group; membership in "wheel" grants admin rights.
-have_safe_user() {
-  local u home
-  if feature_selected create_user && [[ ${CFG[new_user_has_key]:-0} == 1 ]]; then
-    if (( DRY_RUN )) || [[ -z ${RESULT[create_user]:-} ]]; then return 0; fi
-  fi
-  for u in $(getent group wheel 2>/dev/null | cut -d: -f4 | tr ',' ' '); do
-    [[ $u == root ]] && continue
-    home=$(getent passwd "$u" | cut -d: -f6)
-    [[ -n $home && -s "$home/.ssh/authorized_keys" ]] && return 0
-  done
-  return 1
-}
+# have_safe_user is inherited: it uses $ADMIN_GROUP, which is "wheel" on RHEL.
+# Only user creation differs (useradd vs adduser, SELinux restorecon).
 
 run_create_user() {
   local user=${CFG[username]} home tmp line
@@ -26,7 +15,7 @@ run_create_user() {
   else
     run useradd -m -s /bin/bash "$user"
   fi
-  run usermod -aG wheel "$user"
+  run usermod -aG "$ADMIN_GROUP" "$user"
 
   if [[ ${CFG[user_sudo]} == nopasswd ]]; then
     tmp=$(mktemp)

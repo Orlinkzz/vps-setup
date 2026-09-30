@@ -9,7 +9,7 @@
 # =============================================================================
 set -euo pipefail
 
-REPO="${VPS_SETUP_REPO:-OWNER/vps-setup}"   # TODO: replace OWNER with your GitHub username
+REPO="${VPS_SETUP_REPO:-orlinkzz/vps-setup}"
 REF="${VPS_SETUP_REF:-main}"
 DEST="${VPS_SETUP_DIR:-/opt/vps-setup}"
 
@@ -18,11 +18,21 @@ if [[ $EUID -ne 0 ]]; then
   exit 1
 fi
 
-command -v apt-get >/dev/null 2>&1 || { echo "Only Ubuntu/Debian (apt) is supported for now." >&2; exit 1; }
+if command -v apt-get >/dev/null 2>&1; then
+  PKG_UPDATE=(env DEBIAN_FRONTEND=noninteractive apt-get -qq update)
+  PKG_INSTALL=(env DEBIAN_FRONTEND=noninteractive apt-get -y -qq install)
+elif command -v dnf >/dev/null 2>&1; then
+  PKG_UPDATE=(dnf -q -y makecache)
+  PKG_INSTALL=(dnf -q -y install)
+else
+  echo "Only Ubuntu/Debian (apt) and AlmaLinux/Rocky (dnf) are supported for now." >&2
+  exit 1
+fi
+
 for bin in curl tar; do
   command -v "$bin" >/dev/null 2>&1 || {
-    DEBIAN_FRONTEND=noninteractive apt-get update -qq
-    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl tar
+    "${PKG_UPDATE[@]}" >/dev/null 2>&1 || true
+    "${PKG_INSTALL[@]}" curl tar >/dev/null 2>&1
   }
 done
 

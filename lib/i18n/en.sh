@@ -15,8 +15,8 @@ MSG[err.yes_preset]="--yes needs --preset (recommended, minimal, custom or domai
 MSG[err.bad_lang]="Unsupported language '%s' (use: en, id)"
 MSG[err.no_preset]="Preset not found: %s"
 MSG[err.cmd_failed]="Command failed: %s"
-MSG[err.no_apt]="This tool needs apt-get (Ubuntu/Debian). Other distributions are planned."
-MSG[err.os_unsupported]="Sorry, %s is not supported yet. Currently supported: Ubuntu 22.04 / 24.04 and Debian 11 / 12. More Linux distributions are planned."
+MSG[err.no_apt]="This tool needs apt-get (Ubuntu/Debian) or dnf (AlmaLinux/Rocky)."
+MSG[err.os_unsupported]="Sorry, %s is not supported yet. Currently supported: Ubuntu 22.04 / 24.04, Debian 11 / 12, and AlmaLinux / Rocky 8 / 9."
 MSG[warn.os_untested]="%s has not been tested with this tool yet. It will probably work, but continue with care."
 MSG[warn.apt_update]="apt update reported errors (a third-party repository may be broken). Continuing with the existing package lists."
 MSG[msg.cancelled]="Cancelled. Nothing was changed."
@@ -334,6 +334,7 @@ MSG[sum.frankenphp]="FrankenPHP"
 
 MSG[note.php]="PHP %s-FPM socket: /run/php/php%s-fpm.sock"
 MSG[note.docker]="Log out and back in for the docker group membership to take effect."
+MSG[note.frankenphp]="FrankenPHP is installed but not running yet: add a Caddyfile in /etc/frankenphp/, then enable it with:  sudo systemctl enable --now frankenphp"
 
 # ============================================================= Phase 5: ops
 MSG[feat.db_backup.title]="Automated database backups"
