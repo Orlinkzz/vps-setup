@@ -3,7 +3,7 @@
 Interactive, beginner-friendly setup for a fresh Linux server.
 Pick what you want from a menu, answer a few simple questions, review, and go.
 
-> **Status:** Phase 2 of 6 — Ubuntu 22.04 / 24.04. More software and more distros are coming (see [Roadmap](#roadmap)).
+> **Status:** Phase 3 of 6 — Ubuntu 22.04 / 24.04. PostgreSQL, MySQL/MariaDB, Redis with RAM tuning, and a create-database wizard. More coming (see [Roadmap](#roadmap)).
 
 ## Quick start
 
@@ -33,6 +33,10 @@ The interface is **English by default**; you can pick **Bahasa Indonesia** on th
 | `-y`, `--yes` | Non-interactive, accept defaults (requires `--preset`) |
 | `--ssh-key "KEY"` | Public SSH key for the admin user (handy with `--yes`) |
 | `--add-domain` | Jump straight to the "add a website / domain" wizard |
+| `--add-database` | Jump straight to the "create a database / user" wizard |
+| `--engine NAME` | With `--yes --preset database`: `postgresql` or `mysql` (default: postgresql) |
+| `--db NAME` | With `--yes --preset database`: database name to create |
+| `--db-user NAME` | With `--yes --preset database`: database user (defaults to `--db` value) |
 | `--webserver NAME` | With `--yes`: `nginx` (default), `caddy` or `apache` |
 | `--email ADDRESS` | Email for Let's Encrypt (handy with `--yes`) |
 | `--domain`, `--site-type`, `--port`, `--redirect-to` | With `--yes --preset domain`: describe the site to add |
@@ -43,6 +47,8 @@ sudo ./setup.sh --lang id                     # Bahasa Indonesia
 sudo ./setup.sh --yes --preset recommended --ssh-key "ssh-ed25519 AAAA..."
 sudo ./setup.sh --add-domain                  # add another website later
 sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy --port 3000
+sudo ./setup.sh --add-database               # create a database later
+sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
 ```
 
 ## What it can do so far
@@ -52,9 +58,10 @@ sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy
 | System | Update & base tools · Timezone · Hostname (optional) · Swap file |
 | Access | Non-root admin user (SSH key + sudo) · SSH hardening (root login off, key-only login, optional custom port) |
 | Security | UFW firewall · Fail2ban · Automatic security updates |
+| Databases | **PostgreSQL** · **MySQL/MariaDB** · **Redis** (all with RAM-based tuning) · **Create a database / user** wizard |
 | Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard |
 
-Presets: **recommended** (everything except hostname and the domain wizard), **minimal** (basics), **custom** (start from defaults), **domain** (only the domain wizard).
+Presets: **recommended** (everything except hostname and the domain wizard), **minimal** (basics), **custom** (start from defaults), **domain** (only the domain wizard), **database** (only the create-database wizard).
 Every preset opens a checklist, so you can always tick/untick items.
 
 ## Websites and templates
@@ -116,7 +123,7 @@ vps-setup/
 │   ├── 10-user-ssh.sh      # user deploy, SSH hardening
 │   ├── 20-security.sh      # UFW, fail2ban, auto-update
 │   ├── 30-webserver.sh     # Nginx / Caddy / Apache
-│   ├── 40-database.sh      # PostgreSQL / MySQL / MariaDB / Redis
+│   ├── 40-database.sh      # PostgreSQL / MySQL / Redis (RAM tuning + wizard)
 │   ├── 50-runtime.sh       # PHP, Node, Bun, Go, Python, Docker
 │   ├── 60-ssl.sh           # Certbot + wizard tambah domain
 │   └── 70-ops.sh           # backup DB, logrotate, monitoring
@@ -175,7 +182,7 @@ shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh 
 |---|---|
 | 1 ✅ | Framework, menus, i18n, system + access + security |
 | 2 ✅ | Web servers (Nginx, Caddy, Apache), Certbot, "add a domain" wizard, site templates |
-| 3 | Databases (PostgreSQL, MySQL/MariaDB, Redis) with RAM-based tuning, create DB/user wizard |
+| 3 ✅ | Databases (PostgreSQL, MySQL/MariaDB, Redis) with RAM-based tuning, create DB/user wizard |
 | 4 | Runtimes (PHP-FPM, Composer, Node, Bun, Go, Python, Docker, FrankenPHP) |
 | 5 | Ops: DB backups with rotation, monitoring, Nginx fail2ban jails |
 | 6 | Uninstall/rollback, CI, docs, more distros (Debian, AlmaLinux/Rocky) |

@@ -5,7 +5,7 @@
 # =============================================================================
 set -uo pipefail
 
-VERSION="0.2.0"
+VERSION="0.3.0"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$PATH:/usr/sbin:/sbin:/usr/local/sbin"
 
@@ -32,7 +32,7 @@ VPS Setup $VERSION — set up a fresh Linux server step by step.
 Usage: sudo ./setup.sh [options]
 
 Options:
-  --preset NAME     recommended | minimal | custom | domain (skips the first menu)
+  --preset NAME     recommended | minimal | custom | domain | database (skips the first menu)
   --lang en|id      Interface language (default: en; asks if not given)
   --dry-run         Show what would happen without changing anything
   -y, --yes         Non-interactive: accept defaults (requires --preset)
@@ -44,6 +44,10 @@ Options:
   --site-type TYPE  With --yes: static|spa|proxy|laravel|php|wordpress|redirect
   --port N          With --yes: app port for --site-type proxy (default 3000)
   --redirect-to URL With --yes: target for --site-type redirect
+  --add-database    Jump straight to the "create a database / user" wizard
+  --engine NAME     With --yes --preset database: postgresql | mysql (default: postgresql)
+  --db NAME         With --yes --preset database: database name to create
+  --db-user NAME    With --yes --preset database: database user (defaults to --db value)
   -v, --version     Print version
   -h, --help        Show this help
 
@@ -54,6 +58,8 @@ Examples:
   sudo ./setup.sh --yes --preset recommended --ssh-key "ssh-ed25519 AAAA..."
   sudo ./setup.sh --add-domain             # add another website later
   sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy --port 3000
+  sudo ./setup.sh --add-database           # create a database later
+  sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
 EOF
 }
 
@@ -71,11 +77,17 @@ while (( $# )); do
                  [[ $2 =~ ^(nginx|caddy|apache)$ ]] || die "--webserver must be nginx, caddy or apache"
                  CFG[arg_webserver]=$2; shift ;;
     --add-domain) PRESET=domain ;;
+    --add-database) PRESET=database ;;
     --email)   [[ $# -ge 2 ]] || die "--email needs a value"; CFG[arg_email]=$2; shift ;;
     --domain)  [[ $# -ge 2 ]] || die "--domain needs a value"; CFG[arg_domain]=$2; shift ;;
     --site-type) [[ $# -ge 2 ]] || die "--site-type needs a value"; CFG[arg_type]=$2; shift ;;
     --port)    [[ $# -ge 2 ]] || die "--port needs a value"; CFG[arg_port]=$2; shift ;;
     --redirect-to) [[ $# -ge 2 ]] || die "--redirect-to needs a value"; CFG[arg_target]=$2; shift ;;
+    --engine)  [[ $# -ge 2 ]] || die "--engine needs a value"
+               [[ $2 =~ ^(postgresql|mysql)$ ]] || die "--engine must be postgresql or mysql"
+               CFG[arg_engine]=$2; shift ;;
+    --db)      [[ $# -ge 2 ]] || die "--db needs a value"; CFG[arg_db]=$2; shift ;;
+    --db-user) [[ $# -ge 2 ]] || die "--db-user needs a value"; CFG[arg_db_user]=$2; shift ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
