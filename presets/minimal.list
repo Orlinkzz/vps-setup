@@ -1,0 +1,6 @@
+# Basics only
+system_update
+timezone
+swap
+create_user
+ufw

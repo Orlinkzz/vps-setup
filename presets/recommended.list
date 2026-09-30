@@ -1,0 +1,8 @@
+system_update
+timezone
+swap
+create_user
+ssh_harden
+ufw
+fail2ban
+auto_updates

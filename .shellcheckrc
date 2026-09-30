@@ -1,0 +1,2 @@
+# Variables are shared across sourced files, so SC2034 (unused) is a false positive here.
+disable=SC2034,SC2031
