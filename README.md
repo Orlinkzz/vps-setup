@@ -10,13 +10,13 @@ Pick what you want from a menu, answer a few simple questions, review, and go.
 On a **fresh** Ubuntu 22.04 / 24.04, Debian 11 / 12 or AlmaLinux / Rocky 8 / 9 server, as root or with sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/vps-setup/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash
 ```
 
 Prefer to read the code first? (Recommended.)
 
 ```bash
-git clone https://github.com/OWNER/vps-setup.git
+git clone https://github.com/orlinkzz/vps-setup.git
 cd vps-setup
 sudo ./setup.sh
 ```

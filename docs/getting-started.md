@@ -24,13 +24,13 @@ The first time you connect you'll be asked to confirm the server's fingerprint â
 ## 2. Download and run VPS Setup
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/vps-setup/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash
 ```
 
 This downloads the tool and opens a menu. If you prefer to inspect the code first:
 
 ```bash
-git clone https://github.com/OWNER/vps-setup.git
+git clone https://github.com/orlinkzz/vps-setup.git
 cd vps-setup
 sudo ./setup.sh
 ```

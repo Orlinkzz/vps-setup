@@ -23,13 +23,13 @@ Saat pertama connect Anda akan diminta konfirmasi sidik jari server — ketik `y
 ## 2. Download dan jalankan VPS Setup
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/vps-setup/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash
 ```
 
 Perintah ini mendownload tool dan membuka menu. Jika ingin lihat kodenya dulu:
 
 ```bash
-git clone https://github.com/OWNER/vps-setup.git
+git clone https://github.com/orlinkzz/vps-setup.git
 cd vps-setup
 sudo ./setup.sh
 ```

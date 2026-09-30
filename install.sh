@@ -2,7 +2,7 @@
 # =============================================================================
 # VPS Setup bootstrap — downloads the repo and starts the interactive setup.
 #
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/vps-setup/main/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash
 #   curl -fsSL .../install.sh | sudo bash -s -- --lang id
 #
 # Prefer to read the code first? Clone the repo and run: sudo ./setup.sh
