@@ -3,7 +3,7 @@
 Interactive, beginner-friendly setup for a fresh Linux server.
 Pick what you want from a menu, answer a few simple questions, review, and go.
 
-> **Status:** Phase 4 of 6 — Ubuntu 22.04 / 24.04. PHP-FPM, Node.js, Bun, Go, Python 3, Docker, FrankenPHP all installed with a single menu pick. More coming (see [Roadmap](#roadmap)).
+> **Status:** Phase 5 of 6 — Ubuntu 22.04 / 24.04. Automated DB backups with rotation, server health monitoring, and Nginx fail2ban jails. More coming (see [Roadmap](#roadmap)).
 
 ## Quick start
 
@@ -60,6 +60,7 @@ sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
 | Security | UFW firewall · Fail2ban · Automatic security updates |
 | Databases | **PostgreSQL** · **MySQL/MariaDB** · **Redis** (all with RAM-based tuning) · **Create a database / user** wizard |
 | Runtimes | **PHP-FPM** + Composer · **Node.js** · **Bun** · **Go** · **Python 3** · **Docker** + Compose · **FrankenPHP** |
+| Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request) |
 | Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard |
 
 Presets: **recommended** (everything except hostname and the domain wizard), **minimal** (basics), **custom** (start from defaults), **domain** (only the domain wizard), **database** (only the create-database wizard).
@@ -185,7 +186,7 @@ shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh 
 | 2 ✅ | Web servers (Nginx, Caddy, Apache), Certbot, "add a domain" wizard, site templates |
 | 3 ✅ | Databases (PostgreSQL, MySQL/MariaDB, Redis) with RAM-based tuning, create DB/user wizard |
 | 4 ✅ | Runtimes (PHP-FPM, Composer, Node, Bun, Go, Python, Docker, FrankenPHP) |
-| 5 | Ops: DB backups with rotation, monitoring, Nginx fail2ban jails |
+| 5 ✅ | Ops: DB backups with rotation, monitoring, Nginx fail2ban jails |
 | 6 | Uninstall/rollback, CI, docs, more distros (Debian, AlmaLinux/Rocky) |
 
 ## License

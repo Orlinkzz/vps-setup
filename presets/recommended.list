@@ -11,3 +11,4 @@ certbot
 postgresql
 redis
 python_runtime
+nginx_jails

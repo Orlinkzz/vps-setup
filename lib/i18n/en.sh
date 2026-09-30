@@ -334,3 +334,27 @@ MSG[sum.frankenphp]="FrankenPHP"
 
 MSG[note.php]="PHP %s-FPM socket: /run/php/php%s-fpm.sock"
 MSG[note.docker]="Log out and back in for the docker group membership to take effect."
+
+# ============================================================= Phase 5: ops
+MSG[feat.db_backup.title]="Automated database backups"
+MSG[feat.db_backup.desc]="Schedules a nightly backup of all PostgreSQL and/or MySQL databases with configurable retention (how many days to keep). Backups are gzipped SQL files in /var/backups/vps-setup/db/."
+MSG[feat.monitoring.title]="Server health monitoring"
+MSG[feat.monitoring.desc]="Installs vps-setup-health — a CLI command that prints system status (uptime, load, memory, disk, running services, backup stats, SSH failures). Also scheduled nightly to log a snapshot."
+MSG[feat.nginx_jails.title]="Nginx fail2ban jails"
+MSG[feat.nginx_jails.desc]="Adds extra fail2ban jails for nginx: HTTP auth brute-force, URL scanners (botsearch), and repeated bad requests (400/404/444). IPs get banned automatically."
+
+MSG[ops.backup.no_db]="No database engine was found on this server. Install PostgreSQL or MySQL first, then run this option again."
+MSG[ops.backup.ask_retention]="How many days should backup files be kept before they are deleted? (default: 7)"
+MSG[ops.backup.creating]="Setting up nightly database backups..."
+MSG[ops.backup.done]="Nightly DB backup script is ready (runs at 03:00)"
+MSG[ops.monitor.creating]="Setting up health monitoring..."
+MSG[ops.monitor.done]="Health monitoring is ready — run 'sudo vps-setup-health' to see a summary"
+MSG[ops.jails.no_nginx]="Nginx was not detected on this server. Install Nginx first, then run this option again."
+MSG[ops.jails.creating]="Adding nginx fail2ban jails..."
+MSG[ops.jails.done]="Nginx fail2ban jails are active: http-auth, botsearch, bad-request"
+
+MSG[sum.backup]="DB backups (retention: %s days)"
+MSG[sum.monitor]="Health monitoring"
+MSG[sum.jails]="Nginx fail2ban jails"
+
+MSG[note.monitor]="See a summary at any time:  sudo vps-setup-health"

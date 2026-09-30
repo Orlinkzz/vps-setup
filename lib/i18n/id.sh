@@ -319,3 +319,27 @@ MSG[sum.frankenphp]="FrankenPHP"
 
 MSG[note.php]="Socket PHP %s-FPM: /run/php/php%s-fpm.sock"
 MSG[note.docker]="Logout dan login kembali agar grup docker berlaku."
+
+# ============================================================= Fase 5: ops
+MSG[feat.db_backup.title]="Backup database otomatis"
+MSG[feat.db_backup.desc]="Menjadwalkan backup malam hari untuk semua database PostgreSQL dan/atau MySQL dengan retensi yang dapat diatur (berapa hari disimpan). File backup berupa SQL yang di-gzip di /var/backups/vps-setup/db/."
+MSG[feat.monitoring.title]="Pemantauan kesehatan server"
+MSG[feat.monitoring.desc]="Memasang vps-setup-health — perintah CLI yang menampilkan status sistem (uptime, beban, memori, disk, layanan berjalan, statistik backup, kegagalan SSH). Juga dijadwalkan malam hari untuk menyimpan snapshot."
+MSG[feat.nginx_jails.title]="Fail2ban untuk Nginx"
+MSG[feat.nginx_jails.desc]="Menambahkan jail fail2ban tambahan untuk nginx: brute-force HTTP auth, pemindai URL (botsearch), serta permintaan buruk berulang (400/404/444). IP dibanned otomatis."
+
+MSG[ops.backup.no_db]="Tidak ditemukan engine database di server ini. Pasang PostgreSQL atau MySQL dulu, lalu jalankan opsi ini lagi."
+MSG[ops.backup.ask_retention]="Berapa hari file backup disimpan sebelum dihapus? (default: 7)"
+MSG[ops.backup.creating]="Menyiapkan backup database malam hari..."
+MSG[ops.backup.done]="Skrip backup DB malam hari siap (berjalan jam 03:00)"
+MSG[ops.monitor.creating]="Menyiapkan pemantauan kesehatan..."
+MSG[ops.monitor.done]="Pemantauan kesehatan siap — jalankan 'sudo vps-setup-health' untuk melihat ringkasan"
+MSG[ops.jails.no_nginx]="Nginx tidak terdeteksi di server ini. Pasang Nginx dulu, lalu jalankan opsi ini lagi."
+MSG[ops.jails.creating]="Menambahkan jail fail2ban nginx..."
+MSG[ops.jails.done]="Jail fail2ban Nginx aktif: http-auth, botsearch, bad-request"
+
+MSG[sum.backup]="Backup DB (retensi: %s hari)"
+MSG[sum.monitor]="Pemantauan kesehatan"
+MSG[sum.jails]="Jail fail2ban Nginx"
+
+MSG[note.monitor]="Lihat ringkasan kapan saja:  sudo vps-setup-health"
