@@ -5,6 +5,9 @@
 
 OS_ID=""; OS_VERSION=""; OS_CODENAME=""; OS_PRETTY=""
 MEM_MB=0; CPU_COUNT=1; IS_CONTAINER=0
+SSH_SERVICE=ssh
+# Admin group that grants sudo/admin rights (wheel on RHEL family).
+ADMIN_GROUP=sudo
 
 detect_os() {
   [[ -r /etc/os-release ]] || return 1
@@ -12,6 +15,10 @@ detect_os() {
   OS_VERSION=$(. /etc/os-release && printf '%s' "${VERSION_ID:-}")
   OS_CODENAME=$(. /etc/os-release && printf '%s' "${VERSION_CODENAME:-}")
   OS_PRETTY=$(. /etc/os-release && printf '%s' "${PRETTY_NAME:-$ID}")
+  case "$OS_ID" in
+    almalinux|rocky|rhel|centos) SSH_SERVICE=sshd; ADMIN_GROUP=wheel ;;
+    *)                           SSH_SERVICE=ssh;  ADMIN_GROUP=sudo  ;;
+  esac
 }
 
 # 0 = supported, 1 = untested version, 2 = unsupported distro
@@ -20,6 +27,16 @@ os_check() {
     ubuntu)
       case "$OS_VERSION" in
         22.04|24.04) return 0 ;;
+        *) return 1 ;;
+      esac ;;
+    debian)
+      case "$OS_VERSION" in
+        11|12) return 0 ;;
+        *) return 1 ;;
+      esac ;;
+    almalinux|rocky)
+      case "$OS_VERSION" in
+        8|9) return 0 ;;
         *) return 1 ;;
       esac ;;
     *) return 2 ;;
@@ -54,19 +71,76 @@ primary_ip() {
   printf '%s' "${ip:-YOUR_SERVER_IP}"
 }
 
-# ------------------------------------------------------------ apt (Ubuntu)
+# ------------------------------------------------------------ packages
+# Two families: apt (Ubuntu/Debian) and dnf (AlmaLinux/Rocky).
 APT_OPTS=(-o DPkg::Lock::Timeout=120 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+DNF_OPTS=(--setopt=install_weak_deps=False --setopt=timeout=120)
 
-pkg_update()  { run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" update; }
-pkg_upgrade() { run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -y upgrade; }
-pkg_install() { run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -y install "$@"; }
-pkg_installed() { dpkg -s "$1" >/dev/null 2>&1; }
+pkg_update() {
+  case "$OS_ID" in
+    almalinux|rocky|rhel|centos) run dnf "${DNF_OPTS[@]}" -y makecache ;;
+    *) run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" update ;;
+  esac
+}
+
+pkg_upgrade() {
+  case "$OS_ID" in
+    almalinux|rocky|rhel|centos) run dnf "${DNF_OPTS[@]}" -y upgrade ;;
+    *) run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -y upgrade ;;
+  esac
+}
+
+pkg_install() {
+  case "$OS_ID" in
+    almalinux|rocky|rhel|centos) run dnf "${DNF_OPTS[@]}" -y install "$@" ;;
+    *) run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -y install "$@" ;;
+  esac
+}
+
+pkg_installed() {
+  case "$OS_ID" in
+    almalinux|rocky|rhel|centos) rpm -q "$1" >/dev/null 2>&1 ;;
+    *) dpkg -s "$1" >/dev/null 2>&1 ;;
+  esac
+}
+
+# Package name translation (we write the Debian name; map it for dnf).
+pkg_name() {
+  case "$OS_ID" in
+    almalinux|rocky|rhel|centos)
+      case "$1" in
+        apache2)          echo httpd ;;
+        mysql-server)     echo mysql-server ;;
+        postgresql-contrib) echo postgresql-contrib ;;
+        python3-pip)      echo python3-pip ;;
+        python3-venv)     echo python3 ;;
+        python3-dev)      echo python3-devel ;;
+        build-essential)  echo gcc gcc-c++ make ;;
+        ufw)              echo firewalld ;;
+        unattended-upgrades) echo dnf-automatic ;;
+        lsb-release)      echo redhat-lsb-core ;;
+        software-properties-common) echo dnf-plugins-core ;;
+        sudo)             echo sudo ;;
+        openssl)          echo openssl ;;
+        ca-certificates)  echo ca-certificates ;;
+        *)                echo "$1" ;;
+      esac ;;
+    *) echo "$1" ;;
+  esac
+}
+
+# Install by Debian-style name, translating on RHEL family.
+pkg_install_mapped() {
+  local p out=()
+  for p in "$@"; do out+=($(pkg_name "$p")); done
+  pkg_install "${out[@]}"
+}
 
 # ------------------------------------------------------------ services
 svc_enable_now() { run systemctl enable --now "$1"; }
 svc_restart()    { run systemctl restart "$1"; }
 svc_reload()     { run systemctl reload "$1"; }
-SSH_SERVICE=ssh
+# SSH_SERVICE is set in detect_os() once OS_ID is known.
 
 # ------------------------------------------------------------ SSH helpers
 detect_ssh_port() {

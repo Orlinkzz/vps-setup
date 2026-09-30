@@ -3,11 +3,11 @@
 Interactive, beginner-friendly setup for a fresh Linux server.
 Pick what you want from a menu, answer a few simple questions, review, and go.
 
-> **Status:** Phase 5 of 6 — Ubuntu 22.04 / 24.04. Automated DB backups with rotation, server health monitoring, and Nginx fail2ban jails. More coming (see [Roadmap](#roadmap)).
+> **Status:** Phase 6 of 6 — Ubuntu 22.04 / 24.04, Debian 11 / 12, AlmaLinux / Rocky 8 / 9. All phases complete: system, security, web, databases, runtimes, ops, uninstall, CI.
 
 ## Quick start
 
-On a **fresh** Ubuntu server, as root or with sudo:
+On a **fresh** Ubuntu 22.04 / 24.04, Debian 11 / 12 or AlmaLinux / Rocky 8 / 9 server, as root or with sudo:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/OWNER/vps-setup/main/install.sh | sudo bash
@@ -62,6 +62,7 @@ sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
 | Runtimes | **PHP-FPM** + Composer · **Node.js** · **Bun** · **Go** · **Python 3** · **Docker** + Compose · **FrankenPHP** |
 | Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request) |
 | Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard |
+| Platforms | **Ubuntu 22.04 / 24.04** · **Debian 11 / 12** · **AlmaLinux / Rocky 8 / 9** (apt and dnf) |
 
 Presets: **recommended** (everything except hostname and the domain wizard), **minimal** (basics), **custom** (start from defaults), **domain** (only the domain wizard), **database** (only the create-database wizard).
 Every preset opens a checklist, so you can always tick/untick items.
@@ -120,19 +121,16 @@ vps-setup/
 │   ├── os.sh               # deteksi distro, abstraksi package manager
 │   ├── ui.sh               # wrapper whiptail
 │   └── i18n/{id,en}.sh     # teks UI dua bahasa
-├── modules/ubuntu/
-│   ├── 00-system.sh        # update, timezone, hostname, swap
-│   ├── 10-user-ssh.sh      # user deploy, SSH hardening
-│   ├── 20-security.sh      # UFW, fail2ban, auto-update
-│   ├── 30-webserver.sh     # Nginx / Caddy / Apache
-│   ├── 40-database.sh      # PostgreSQL / MySQL / Redis (RAM tuning + wizard)
-│   ├── 50-runtime.sh       # PHP, Node, Bun, Go, Python, Docker
-│   ├── 60-ssl.sh           # Certbot + wizard tambah domain
-│   └── 70-ops.sh           # backup DB, logrotate, monitoring
+├── modules/
+│   ├── ubuntu/             # 00-system … 70-ops (apt, ufw, apache2)
+│   ├── debian/             # sama seperti Ubuntu; PHP tanpa PPA, MariaDB
+│   └── almalinux/          # RHEL family: dnf, firewalld, httpd, wheel
 ├── presets/                # daftar modul per preset
-├── templates/              # config nginx, postgres, dll.
-├── docs/                   # panduan pemula (ID/EN)
-└── tests/                  # shellcheck + uji di container Ubuntu 22/24
+├── templates/              # config nginx, apache, caddy, halaman HTML
+├── docs/                   # panduan pemula (getting-started.md, memulai.md)
+├── tests/                  # unit, dry-run, template, integration
+├── .github/workflows/      # CI: shellcheck, i18n, dry-run, template, integration
+└── lib/uninstall.sh        # rollback / uninstall
 ```
 
 ## Layout
@@ -141,13 +139,16 @@ vps-setup/
 setup.sh               entry point + menus
 install.sh             curl | bash bootstrap
 lib/common.sh          logging, run/dry-run, write_file, validators, feature registry
-lib/os.sh              OS detection, package manager / service abstraction (apt today)
+lib/os.sh              OS detection, package manager / service abstraction (apt + dnf)
 lib/ui.sh              whiptail wrappers (all return defaults with --yes)
 lib/i18n/{en,id}.sh    all user-visible text
-modules/ubuntu/*.sh    one file per group of features
+lib/uninstall.sh       rollback: removes everything vps-setup created
+modules/*/*.sh         one file per group of features, per distro family
 presets/*.list         feature ids per preset
 templates/             web server configs (nginx, apache, caddy) and placeholder pages
 tests/                 unit, smoke, template and integration tests
+docs/                  beginner guide (EN + ID)
+.github/workflows/     CI pipeline
 ```
 
 ## Adding a feature
@@ -178,6 +179,27 @@ DISPOSABLE=1 bash tests/integration.sh   # real (non-dry-run) nginx + apache flo
 shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh tests/*.sh
 ```
 
+CI runs the same checks on every push (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
+
+## Uninstall
+
+Removes every file and config vps-setup created. **Packages are not removed.**
+
+```bash
+sudo ./lib/uninstall.sh            # asks for confirmation
+sudo ./lib/uninstall.sh --yes      # non-interactive
+```
+
+Replaced files are restored from `/var/backups/vps-setup/` if needed. A few things are
+left alone deliberately (swap file, databases, users, packages) — the script prints the
+exact commands to remove them yourself.
+
+## Beginner guide
+
+New to servers? [`docs/getting-started.md`](docs/getting-started.md) (English) and
+[`docs/memulai.md`](docs/memulai.md) (Bahasa Indonesia) walk through the first login,
+running the tool, and what to do next.
+
 ## Roadmap
 
 | Phase | Scope |
@@ -187,7 +209,7 @@ shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh 
 | 3 ✅ | Databases (PostgreSQL, MySQL/MariaDB, Redis) with RAM-based tuning, create DB/user wizard |
 | 4 ✅ | Runtimes (PHP-FPM, Composer, Node, Bun, Go, Python, Docker, FrankenPHP) |
 | 5 ✅ | Ops: DB backups with rotation, monitoring, Nginx fail2ban jails |
-| 6 | Uninstall/rollback, CI, docs, more distros (Debian, AlmaLinux/Rocky) |
+| 6 ✅ | Uninstall/rollback, CI, docs, more distros (Debian, AlmaLinux/Rocky) |
 
 ## License
 

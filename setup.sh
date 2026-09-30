@@ -5,7 +5,7 @@
 # =============================================================================
 set -uo pipefail
 
-VERSION="0.5.0"
+VERSION="0.6.0"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$PATH:/usr/sbin:/sbin:/usr/local/sbin"
 
@@ -139,7 +139,10 @@ check_os() {
 }
 
 load_modules() {
-  local dir="$ROOT_DIR/modules/$OS_ID" f
+  local family=$OS_ID dir f
+  # Rocky / RHEL / CentOS use the AlmaLinux module set (same dnf-based family).
+  case "$OS_ID" in rocky|rhel|centos) family=almalinux ;; esac
+  dir="$ROOT_DIR/modules/$family"
   [[ -d $dir ]] || die "$(t err.os_unsupported "$OS_PRETTY")"
   for f in "$dir"/*.sh; do
     # shellcheck source=/dev/null
