@@ -3,20 +3,20 @@
 Interactive, beginner-friendly setup for a fresh Linux server.
 Pick what you want from a menu, answer a few simple questions, review, and go.
 
-> **Status:** Phase 1 of 6 — Ubuntu 22.04 / 24.04. More software and more distros are coming (see [Roadmap](#roadmap)).
+> **Status:** Phase 2 of 6 — Ubuntu 22.04 / 24.04. More software and more distros are coming (see [Roadmap](#roadmap)).
 
 ## Quick start
 
 On a **fresh** Ubuntu server, as root or with sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/OWNER/vps-setup/main/install.sh | sudo bash
 ```
 
 Prefer to read the code first? (Recommended.)
 
 ```bash
-git clone https://github.com/orlinkzz/vps-setup.git
+git clone https://github.com/OWNER/vps-setup.git
 cd vps-setup
 sudo ./setup.sh
 ```
@@ -32,23 +32,63 @@ The interface is **English by default**; you can pick **Bahasa Indonesia** on th
 | `--dry-run` | Show what would happen, change nothing (works without root) |
 | `-y`, `--yes` | Non-interactive, accept defaults (requires `--preset`) |
 | `--ssh-key "KEY"` | Public SSH key for the admin user (handy with `--yes`) |
+| `--add-domain` | Jump straight to the "add a website / domain" wizard |
+| `--webserver NAME` | With `--yes`: `nginx` (default), `caddy` or `apache` |
+| `--email ADDRESS` | Email for Let's Encrypt (handy with `--yes`) |
+| `--domain`, `--site-type`, `--port`, `--redirect-to` | With `--yes --preset domain`: describe the site to add |
 
 ```bash
 sudo ./setup.sh --dry-run                     # preview only
 sudo ./setup.sh --lang id                     # Bahasa Indonesia
 sudo ./setup.sh --yes --preset recommended --ssh-key "ssh-ed25519 AAAA..."
+sudo ./setup.sh --add-domain                  # add another website later
+sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy --port 3000
 ```
 
-## What Phase 1 can do
+## What it can do so far
 
 | Group | Feature |
 |---|---|
 | System | Update & base tools · Timezone · Hostname (optional) · Swap file |
 | Access | Non-root admin user (SSH key + sudo) · SSH hardening (root login off, key-only login, optional custom port) |
 | Security | UFW firewall · Fail2ban · Automatic security updates |
+| Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard |
 
-Presets: **recommended** (everything except hostname), **minimal** (basics), **custom** (start from defaults).
+Presets: **recommended** (everything except hostname and the domain wizard), **minimal** (basics), **custom** (start from defaults), **domain** (only the domain wizard).
 Every preset opens a checklist, so you can always tick/untick items.
+
+## Websites and templates
+
+The **domain wizard** asks for a domain, whether to also serve `www.`, and the kind of site, then writes a configuration from a template, **tests it with the server's own checker, and only then reloads**. If the test fails, the new files are removed and the running server is untouched. It can run as often as you like.
+
+| Site type | For | Needs |
+|---|---|---|
+| `static` | HTML/CSS/JS files | – |
+| `spa` | React / Vue / Svelte build output (client-side routing) | – |
+| `proxy` | Node, Bun, Go, Python, FrankenPHP, Docker ... on `127.0.0.1:PORT` (WebSockets included) | – |
+| `laravel` | Laravel (app in `/var/www/DOMAIN`, web root `public/`) | PHP-FPM |
+| `php` | Generic PHP site | PHP-FPM |
+| `wordpress` | WordPress (files in `/var/www/DOMAIN`, no PHP in uploads) | PHP-FPM |
+| `redirect` | Permanent 301 to another domain/URL, path and query preserved | – |
+
+All templates live in [`templates/`](templates/) and double as **reference configs** you can copy by hand:
+
+```
+templates/nginx/    global settings, catch-all, snippets/, sites/<type>.conf.tpl, reference/https-full.conf.tpl
+templates/apache/   global settings, catch-all, sites/<type>.conf.tpl
+templates/caddy/    Caddyfile.tpl (+ catch-all), sites/<type>.caddy.tpl
+templates/html/     placeholder pages
+```
+
+Placeholders: `{{DOMAIN}}` `{{SERVER_NAMES}}` `{{SERVER_NAMES_COMMA}}` `{{SERVER_ALIAS_LINE}}` `{{ROOT}}` `{{UPSTREAM}}` `{{PHP_SOCKET_PATH}}` `{{REDIRECT_TARGET}}` `{{MAX_BODY}}` `{{MAX_BODY_BYTES}}`.
+
+Good to know:
+- **Unknown hostnames / direct IP access** show a friendly "Server is running" page (or, if you choose, the connection is closed). Nginx also refuses TLS handshakes for unknown names (nginx ≥ 1.19.4).
+- **HTTPS:** Nginx/Apache use Certbot (`--redirect`, auto-renew timer); Caddy does it by itself. The wizard checks DNS first and warns instead of burning Let's Encrypt rate limits. Set `VPS_SETUP_LE_STAGING=1` to use test certificates.
+- **PHP sites** can be created before PHP-FPM exists (they return 502 until Phase 4 installs it).
+- **Dotfiles** (`.env`, `.git`, `.htaccess` ...) are never served; HSTS is left off until you decide to enable it.
+- **IPv6-less servers** are detected and the `listen [::]` lines are left out automatically.
+- Ubuntu's stock `nginx.conf` directives that would duplicate ours are commented out (a backup is kept in `/var/backups/vps-setup/`).
 
 ## Safety by design
 
@@ -97,7 +137,8 @@ lib/ui.sh              whiptail wrappers (all return defaults with --yes)
 lib/i18n/{en,id}.sh    all user-visible text
 modules/ubuntu/*.sh    one file per group of features
 presets/*.list         feature ids per preset
-tests/                 unit + smoke tests
+templates/             web server configs (nginx, apache, caddy) and placeholder pages
+tests/                 unit, smoke, template and integration tests
 ```
 
 ## Adding a feature
@@ -119,9 +160,13 @@ Use `run`, `run_sh`, `write_file`, `pkg_install`, `svc_enable_now` — they resp
 ## Tests
 
 ```bash
-bash tests/unit.sh       # validators, idempotent write_file
-bash tests/dry-run.sh    # syntax, i18n key coverage, full non-interactive dry run
-shellcheck -x -s bash setup.sh lib/*.sh modules/*/*.sh
+bash tests/unit.sh        # validators, idempotent write_file
+bash tests/dry-run.sh     # syntax, i18n key coverage, dry runs (all servers x all site types)
+bash tests/templates.sh   # every template validated by nginx -t / apache2 -t / caddy validate,
+                          # plus live HTTP checks on nginx (needs root; skips missing servers)
+DISPOSABLE=1 bash tests/integration.sh   # real (non-dry-run) nginx + apache flow, run twice.
+                                         # DESTRUCTIVE: only inside a throw-away container/VM
+shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh tests/*.sh
 ```
 
 ## Roadmap
@@ -129,7 +174,7 @@ shellcheck -x -s bash setup.sh lib/*.sh modules/*/*.sh
 | Phase | Scope |
 |---|---|
 | 1 ✅ | Framework, menus, i18n, system + access + security |
-| 2 | Web servers (Nginx, Caddy, Apache), Certbot, "add a domain" wizard |
+| 2 ✅ | Web servers (Nginx, Caddy, Apache), Certbot, "add a domain" wizard, site templates |
 | 3 | Databases (PostgreSQL, MySQL/MariaDB, Redis) with RAM-based tuning, create DB/user wizard |
 | 4 | Runtimes (PHP-FPM, Composer, Node, Bun, Go, Python, Docker, FrankenPHP) |
 | 5 | Ops: DB backups with rotation, monitoring, Nginx fail2ban jails |
@@ -137,4 +182,4 @@ shellcheck -x -s bash setup.sh lib/*.sh modules/*/*.sh
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Replace `orlinkzz` in `install.sh` / this README with your GitHub username, and `Orlinkzz` in `LICENSE`.
+MIT — see [LICENSE](LICENSE). Replace `OWNER` in `install.sh` / this README with your GitHub username, and `<YOUR NAME>` in `LICENSE`.

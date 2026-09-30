@@ -140,3 +140,57 @@ valid_port_list() {
     valid_port "${BASH_REMATCH[1]}" || return 1
   done
 }
+
+# ------------------------------------------------------------------ templates
+# render_tpl <file> KEY=value ...  → prints the file with {{KEY}} replaced.
+# Fails if any {{PLACEHOLDER}} is left over (catches typos early).
+render_tpl() {
+  local f=$1 c kv
+  shift
+  [[ -r $f ]] || { log_err "template not found: $f"; return 1; }
+  shopt -u patsub_replacement 2>/dev/null || true
+  c=$(<"$f")
+  for kv in "$@"; do
+    c=${c//"{{${kv%%=*}}}"/${kv#*=}}
+  done
+  if [[ $c == *"{{"* ]]; then
+    log_err "unreplaced placeholder in $f: $(printf '%s' "$c" | grep -o '{{[A-Z_]*}}' | sort -u | tr '\n' ' ')"
+    return 1
+  fi
+  printf '%s\n' "$c"
+}
+
+# ------------------------------------------------------------------ settings
+# Small key=value store so later runs (e.g. "add a domain") remember choices.
+SETTINGS_FILE=/etc/vps-setup/settings.conf
+
+setting_get() {
+  [[ -f $SETTINGS_FILE ]] || return 0
+  sed -n "s/^$1=//p" "$SETTINGS_FILE" | tail -n 1
+}
+
+setting_set() {
+  local k=$1 v=$2 tmp
+  if (( DRY_RUN )); then log_dry "setting $k=$v"; return 0; fi
+  install -d -m 755 "$(dirname "$SETTINGS_FILE")"
+  tmp=$(mktemp)
+  { [[ -f $SETTINGS_FILE ]] && grep -v "^${k}=" "$SETTINGS_FILE"; printf '%s=%s\n' "$k" "$v"; } >"$tmp" || true
+  install -m 644 "$tmp" "$SETTINGS_FILE"
+  rm -f "$tmp"
+}
+
+# ------------------------------------------------------------------ more validators
+valid_domain() {
+  local re='^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$'
+  (( ${#1} <= 253 )) && [[ $1 =~ $re ]]
+}
+valid_email() {
+  local re='^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+  [[ $1 =~ $re ]]
+}
+# normalize_domain "HTTPS://Example.com/path" → example.com
+normalize_domain() {
+  local d=${1,,}
+  d=${d#http://}; d=${d#https://}; d=${d%%/*}; d=${d%%:*}; d=${d// /}
+  printf '%s' "$d"
+}

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Smoke tests: syntax, message-key coverage, and a full non-interactive dry run.
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 fail=0
 
 echo "== syntax =="
@@ -10,7 +10,7 @@ for f in setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh tests/*.sh; d
 done
 
 echo "== message keys used but not defined in en.sh =="
-used=$(grep -rhoE '\bt "?[a-z0-9_]+\.[a-z0-9_.]+' setup.sh lib modules | sed -E 's/^t "?//' | sort -u)
+used=$(grep -rhoE '\bt "?[a-z0-9_]+\.[a-z0-9_.]+' setup.sh lib modules | sed -E 's/^t "?//' | grep -v '\.$' | sort -u)
 for k in $used; do
   grep -qF "MSG[$k]=" lib/i18n/en.sh || { echo "MISSING: $k"; fail=1; }
 done
@@ -22,5 +22,16 @@ bash ./setup.sh --yes --dry-run --preset recommended --lang en --ssh-key \
 
 echo "== dry run: minimal (id) =="
 bash ./setup.sh --yes --dry-run --preset minimal --lang id >/tmp/vps-dry2.out 2>&1 || true
+
+printf 'webserver\nadd_domain\n' > presets/_wd.list
+trap 'rm -f presets/_wd.list' EXIT
+echo "== dry run: every web server x site type =="
+for ws in nginx apache caddy; do
+  for ty in static spa proxy laravel php wordpress redirect; do
+    bash ./setup.sh --yes --dry-run --preset _wd --lang en --webserver "$ws" --email me@example.com \
+      --domain "t-$ty.example.com" --site-type "$ty" --port 3000 --redirect-to https://example.org \
+      >/tmp/vps-dry3.out 2>&1 || { echo "dry run FAILED: $ws/$ty"; tail -n 15 /tmp/vps-dry3.out; fail=1; }
+  done
+done
 
 exit $fail

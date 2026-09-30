@@ -42,10 +42,10 @@ prompt_create_user() {
 
   [[ -n $root_keys ]] && items+=(copy "$(t user.key_copy)")
   items+=(paste "$(t user.key_paste)" skip "$(t user.key_skip)")
-  if [[ -n ${CFG[ssh_pubkey]:-} ]]; then default_src=paste
+  if [[ -n ${CFG[ssh_pubkey]:-} ]]; then default_src="paste"
   elif [[ -n $root_keys ]]; then default_src=copy
   elif (( ASSUME_YES )); then default_src=skip
-  else default_src=paste
+  else default_src="paste"
   fi
   src=$(ui_menu "$title" "$(t user.ask_key)" "$default_src" "${items[@]}") || return 1
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Unit tests for validators and helpers (no root, no changes to the system).
 set -uo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 DRY_RUN=1; ASSUME_YES=1; LOG_FILE=/tmp/vps-unit.log
 # shellcheck source=../lib/common.sh
 source lib/common.sh

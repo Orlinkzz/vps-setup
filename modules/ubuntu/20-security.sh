@@ -57,6 +57,7 @@ run_ufw() {
   log_ok "$(t ufw.enabled)"
 }
 
+# shellcheck disable=SC2086  # ports are a space separated list on purpose
 summary_ufw() { t sum.ufw "$(printf ', %s' ${CFG[ufw_ports]:-} | sed 's#/tcp##g')"; }
 notes_ufw() { t note.ufw_cloud; echo; }
 

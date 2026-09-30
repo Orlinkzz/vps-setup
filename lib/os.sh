@@ -34,6 +34,17 @@ detect_hw() {
   fi
 }
 
+# True when the kernel really has IPv6 (some VPS images disable it; nginx then refuses "listen [::]:80").
+ipv6_ok() {
+  [[ -s /proc/net/if_inet6 ]] || return 1
+  [[ $(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || echo 0) == 0 ]]
+}
+
+# nginx_filter: stdin → stdout; drops IPv6 listen lines when IPv6 is unavailable.
+nginx_filter() {
+  if ipv6_ok; then cat; else grep -vE '^[[:space:]]*listen[[:space:]]+\[::\]' || true; fi
+}
+
 has_systemd() { [[ -d /run/systemd/system ]]; }
 
 primary_ip() {

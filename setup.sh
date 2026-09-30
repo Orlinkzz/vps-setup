@@ -5,7 +5,7 @@
 # =============================================================================
 set -uo pipefail
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$PATH:/usr/sbin:/sbin:/usr/local/sbin"
 
@@ -32,11 +32,18 @@ VPS Setup $VERSION — set up a fresh Linux server step by step.
 Usage: sudo ./setup.sh [options]
 
 Options:
-  --preset NAME     recommended | minimal | custom (skips the first menu)
+  --preset NAME     recommended | minimal | custom | domain (skips the first menu)
   --lang en|id      Interface language (default: en; asks if not given)
   --dry-run         Show what would happen without changing anything
   -y, --yes         Non-interactive: accept defaults (requires --preset)
   --ssh-key "KEY"   Public SSH key for the admin user (useful with --yes)
+  --webserver NAME  With --yes: nginx | caddy | apache (default: nginx)
+  --add-domain      Jump straight to the "add a website / domain" wizard
+  --email ADDRESS   Email for Let's Encrypt (useful with --yes)
+  --domain NAME     With --yes: domain to add          (needs --preset domain)
+  --site-type TYPE  With --yes: static|spa|proxy|laravel|php|wordpress|redirect
+  --port N          With --yes: app port for --site-type proxy (default 3000)
+  --redirect-to URL With --yes: target for --site-type redirect
   -v, --version     Print version
   -h, --help        Show this help
 
@@ -45,6 +52,8 @@ Examples:
   sudo ./setup.sh --lang id                # Bahasa Indonesia
   sudo ./setup.sh --dry-run                # preview only
   sudo ./setup.sh --yes --preset recommended --ssh-key "ssh-ed25519 AAAA..."
+  sudo ./setup.sh --add-domain             # add another website later
+  sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy --port 3000
 EOF
 }
 
@@ -58,6 +67,15 @@ while (( $# )); do
     --preset)  [[ $# -ge 2 ]] || die "--preset needs a value"; PRESET=$2; shift ;;
     --lang)    [[ $# -ge 2 ]] || die "--lang needs a value"; LANG_CODE=$2; shift ;;
     --ssh-key) [[ $# -ge 2 ]] || die "--ssh-key needs a value"; CFG[ssh_pubkey]=$2; shift ;;
+    --webserver) [[ $# -ge 2 ]] || die "--webserver needs a value"
+                 [[ $2 =~ ^(nginx|caddy|apache)$ ]] || die "--webserver must be nginx, caddy or apache"
+                 CFG[arg_webserver]=$2; shift ;;
+    --add-domain) PRESET=domain ;;
+    --email)   [[ $# -ge 2 ]] || die "--email needs a value"; CFG[arg_email]=$2; shift ;;
+    --domain)  [[ $# -ge 2 ]] || die "--domain needs a value"; CFG[arg_domain]=$2; shift ;;
+    --site-type) [[ $# -ge 2 ]] || die "--site-type needs a value"; CFG[arg_type]=$2; shift ;;
+    --port)    [[ $# -ge 2 ]] || die "--port needs a value"; CFG[arg_port]=$2; shift ;;
+    --redirect-to) [[ $# -ge 2 ]] || die "--redirect-to needs a value"; CFG[arg_target]=$2; shift ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
@@ -138,6 +156,7 @@ select_preset() {
       recommended "$(t menu.recommended)" \
       minimal "$(t menu.minimal)" \
       custom "$(t menu.custom)" \
+      domain "$(t menu.domain)" \
       help "$(t menu.help)" \
       quit "$(t menu.quit)") || quit_cancel
     case $choice in
