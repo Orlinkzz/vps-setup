@@ -79,6 +79,8 @@ set -uo pipefail
 LOG=/var/log/vps-setup-backup.log
 DIR=/var/backups/vps-setup/db
 RETENTION=7
+# shellcheck disable=SC1091
+[ -r /etc/vps-setup/backup.conf ] && . /etc/vps-setup/backup.conf
 
 mkdir -p "$DIR"
 echo "=== $(date) ===" >>"$LOG"

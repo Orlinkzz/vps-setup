@@ -290,7 +290,8 @@ MSG[sum.wizard]="%s"
 
 MSG[note.postgresql]="Connect:  sudo -u postgres psql"
 MSG[note.mysql]="Connect:  sudo mysql"
-MSG[note.mysql_root]="Root password is stored in /var/log/vps-setup.log (scroll up to find it)."
+MSG[note.mysql_root]="MySQL root password: %s  (also saved in /root/.my.cnf, so \"sudo mysql\" keeps working)"
+MSG[db.mysql.root_unchanged]="MySQL root password was not changed (root may already have one). Existing login kept."
 MSG[note.redis]="Connect:  redis-cli"
 
 # ============================================================= Phase 4: runtimes

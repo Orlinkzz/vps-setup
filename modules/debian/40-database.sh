@@ -7,12 +7,11 @@ source "$ROOT_DIR/modules/ubuntu/40-database.sh"
 
 # Debian has no mysql-server package; the drop-in replacement is mariadb-server.
 run_mysql() {
-  local share=$(_db_share) root_pass
+  local share=$(_db_share)
   pkg_install mariadb-server
 
-  # MariaDB 10.4+ uses unix_socket auth for root by default, so no password is needed here.
-  root_pass=$(_rand_pass)
-  CFG[mysql_root_pass]=$root_pass
+  # MariaDB 10.4+ uses unix_socket auth for root by default ("sudo mysql"), so no password
+  # is set. (A random password used to be generated and reported here but never applied.)
 
   local bp=$(( MEM_MB * 25 / 100 / share ))  # innodb_buffer_pool
   (( bp < 64 )) && bp=64; (( bp > 4096 )) && bp=4096

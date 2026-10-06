@@ -24,6 +24,19 @@ bash ./setup.sh --yes --dry-run --preset recommended --lang en --ssh-key \
 grep -q "Nginx fail2ban jails" /tmp/vps-dry.out && ! grep -q "^! Skipped:" /tmp/vps-dry.out \
   || { echo "REGRESSION: a selected feature was dropped"; grep "Skipped" /tmp/vps-dry.out; fail=1; }
 
+# Regresi: nilai CFG yang diisi di run_<fitur> (subshell) harus sampai ke catatan akhir
+echo "== CFG survives the feature subshell =="
+cat > modules/ubuntu/99-ztest.sh <<'EOT'
+register_feature ztest test on
+run_ztest() { CFG[ztest]=from-subshell; }
+notes_ztest() { echo "ZTEST_VALUE=${CFG[ztest]:-MISSING}"; }
+EOT
+echo ztest > presets/_z.list
+bash ./setup.sh --yes --dry-run --preset _z --lang en >/tmp/vps-dry-z.out 2>&1
+grep -q "ZTEST_VALUE=from-subshell" /tmp/vps-dry-z.out \
+  || { echo "REGRESSION: CFG lost after run_<feature>"; fail=1; }
+rm -f modules/ubuntu/99-ztest.sh presets/_z.list
+
 echo "== dry run: minimal (id) =="
 bash ./setup.sh --yes --dry-run --preset minimal --lang id >/tmp/vps-dry2.out 2>&1 || true
 

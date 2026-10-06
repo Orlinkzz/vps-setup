@@ -81,9 +81,13 @@ prompt_bun_runtime() { return 0; }
 
 run_bun_runtime() {
   log_info "$(t runtime.bun.installing)"
-  run_sh "curl -fsSL https://bun.sh/install | bash"
-  run ln -sf "$HOME/.bun/bin/bun" /usr/local/bin/bun 2>/dev/null || true
-  run ln -sf "$HOME/.bun/bin/bunx" /usr/local/bin/bunx 2>/dev/null || true
+  # The Bun installer needs unzip, which is only installed by the "system update" step.
+  command -v unzip >/dev/null 2>&1 || pkg_install unzip
+  # System-wide install (not under /root) so every user can run it through /usr/local/bin.
+  run_sh "curl -fsSL https://bun.sh/install | BUN_INSTALL=/opt/bun bash"
+  run chmod -R a+rX /opt/bun
+  run ln -sf /opt/bun/bin/bun /usr/local/bin/bun
+  run ln -sf /opt/bun/bin/bun /usr/local/bin/bunx
   log_ok "$(t runtime.bun.done)"
 }
 
@@ -99,7 +103,9 @@ run_go_runtime() {
   [[ $arch == x86_64 ]] && arch=amd64
   [[ $arch == aarch64 ]] && arch=arm64
   # Fetch latest go version
-  ver=$(curl -fsSL https://go.dev/VERSION?m=text 2>/dev/null | head -n 1) || ver=go1.23.0
+  ver=$(curl -fsSL --max-time 15 'https://go.dev/VERSION?m=text' 2>/dev/null | head -n 1 || true)
+  # A failed curl inside a pipeline still "succeeds", so validate the value instead.
+  [[ $ver =~ ^go[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || ver=go1.23.0
   url="https://go.dev/dl/${ver}.linux-${arch}.tar.gz"
 
   if [[ ! -d /usr/local/go ]]; then

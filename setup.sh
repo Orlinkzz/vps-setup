@@ -252,7 +252,7 @@ review() {
 
 # ------------------------------------------------------------------ execution
 run_features() {
-  local id title i=0 total=0 rc
+  local id title i=0 total=0 rc statef
   for id in "${FEATURE_IDS[@]}"; do feature_selected "$id" && total=$((total + 1)); done
   (( DRY_RUN )) && log_dry "no changes will be made"
 
@@ -262,8 +262,20 @@ run_features() {
     title=$(t "feat.$id.title")
     log_step "[$i/$total] $title"
     rc=0
-    ( set -e; "run_$id" )
+    # Fitur berjalan di subshell, jadi nilai CFG yang diisi saat instalasi (port SSH akhir,
+    # password MySQL, dll.) hilang begitu subshell selesai. Simpan ke file sementara (600)
+    # lalu muat lagi supaya ringkasan/catatan akhir memakai nilai yang benar.
+    statef=$(mktemp)
+    ( set -e
+      # shellcheck disable=SC2064
+      trap "declare -p CFG >\"$statef\" 2>/dev/null" EXIT
+      "run_$id" )
     rc=$?
+    if [[ -s $statef ]]; then
+      # shellcheck disable=SC1090
+      source <(sed '1s/^declare -A/declare -gA/' "$statef")
+    fi
+    rm -f "$statef"
     case $rc in
       0)  RESULT[$id]=ok; state_mark "$id" ok ;;
       10) RESULT[$id]=skipped; state_mark "$id" skipped ;;

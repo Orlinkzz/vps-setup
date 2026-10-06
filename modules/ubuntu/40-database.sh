@@ -100,13 +100,26 @@ run_mysql() {
   pkg_install mysql-server
 
   root_pass=$(_rand_pass)
+  CFG[mysql_root_pass]=""
 
-  # Create a deploy-friendly root password + mysql_native_password fallback
+  # Set a root password. It is only reported/stored when the change really succeeded
+  # (on re-runs root may already have one). Password goes via stdin, not the process list.
   if (( ! DRY_RUN )); then
-    mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$root_pass';" 2>/dev/null || true
+    if printf "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '%s';\n" "$root_pass" \
+         | mysql 2>>"$LOG_FILE"; then
+      CFG[mysql_root_pass]=$root_pass
+      # Keep "sudo mysql" working now that root no longer uses auth_socket.
+      if [[ ! -e /root/.my.cnf ]]; then
+        write_file /root/.my.cnf 600 <<EOF
+[client]
+user=root
+password="$root_pass"
+EOF
+      fi
+    else
+      log_warn "$(t db.mysql.root_unchanged)"
+    fi
   fi
-
-  CFG[mysql_root_pass]=$root_pass
 
   # RAM tuning
   local bp=$(( MEM_MB * 25 / 100 / share ))  # innodb_buffer_pool
@@ -138,7 +151,8 @@ summary_mysql() {
 
 notes_mysql() {
   t note.mysql; echo
-  t note.mysql_root; echo
+  if [[ -n ${CFG[mysql_root_pass]:-} ]]; then t note.mysql_root "${CFG[mysql_root_pass]}"; echo; fi
+  return 0
 }
 
 # ---- Redis ----

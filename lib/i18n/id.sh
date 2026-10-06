@@ -281,7 +281,8 @@ MSG[sum.wizard]="%s"
 
 MSG[note.postgresql]="Koneksi:  sudo -u postgres psql"
 MSG[note.mysql]="Koneksi:  sudo mysql"
-MSG[note.mysql_root]="Password root disimpan di /var/log/vps-setup.log (gulir ke atas untuk menemukannya)."
+MSG[note.mysql_root]="Password root MySQL: %s  (juga disimpan di /root/.my.cnf, jadi \"sudo mysql\" tetap jalan)"
+MSG[db.mysql.root_unchanged]="Password root MySQL tidak diubah (root mungkin sudah punya password). Login lama dipertahankan."
 MSG[note.redis]="Koneksi:  redis-cli"
 
 # ============================================================= Fase 4: runtime
