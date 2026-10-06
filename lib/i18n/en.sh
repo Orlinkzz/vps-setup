@@ -38,6 +38,8 @@ MSG[select.none]="Nothing selected. Exiting without changes."
 MSG[help.title]="About the options"
 
 MSG[prompt.skipped]="Skipped: %s"
+MSG[prompt.dropped.title]="Some choices were skipped"
+MSG[prompt.dropped.text]="These items were selected but will NOT be installed (cancelled or a requirement is missing):\n\n%s\nRun the tool again to retry them."
 MSG[review.title]="Review your choices"
 MSG[review.head]="These steps will run, in this order:"
 MSG[review.dry]="DRY RUN: nothing will really be changed."

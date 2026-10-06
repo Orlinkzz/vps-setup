@@ -39,6 +39,8 @@ MSG[select.none]="Tidak ada yang dipilih. Keluar tanpa perubahan."
 MSG[help.title]="Penjelasan opsi"
 
 MSG[prompt.skipped]="Dilewati: %s"
+MSG[prompt.dropped.title]="Beberapa pilihan dilewati"
+MSG[prompt.dropped.text]="Item berikut sempat dipilih tetapi TIDAK akan dipasang (dibatalkan atau syaratnya belum terpenuhi):\n\n%s\nJalankan tool ini lagi untuk mencobanya kembali."
 MSG[review.title]="Periksa pilihan Anda"
 MSG[review.head]="Langkah berikut akan dijalankan, berurutan:"
 MSG[review.dry]="DRY RUN: tidak ada yang benar-benar diubah."

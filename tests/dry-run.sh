@@ -20,6 +20,10 @@ bash ./setup.sh --yes --dry-run --preset recommended --lang en --ssh-key \
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example" \
   >/tmp/vps-dry.out 2>&1 || { echo "dry run FAILED"; tail -n 30 /tmp/vps-dry.out; fail=1; }
 
+# Regresi: fitur preset tidak boleh gugur diam-diam (mis. nginx_jails saat nginx baru dipasang di run yang sama)
+grep -q "Nginx fail2ban jails" /tmp/vps-dry.out && ! grep -q "^! Skipped:" /tmp/vps-dry.out \
+  || { echo "REGRESSION: a selected feature was dropped"; grep "Skipped" /tmp/vps-dry.out; fail=1; }
+
 echo "== dry run: minimal (id) =="
 bash ./setup.sh --yes --dry-run --preset minimal --lang id >/tmp/vps-dry2.out 2>&1 || true
 

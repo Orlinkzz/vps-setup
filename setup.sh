@@ -192,7 +192,8 @@ load_preset() {
     return 0
   fi
   [[ -f $f ]] || die "$(t err.no_preset "$name")"
-  while IFS= read -r id; do
+  # "|| [[ -n $id ]]" supaya baris terakhir tanpa newline tetap terbaca
+  while IFS= read -r id || [[ -n $id ]]; do
     id=${id%%#*}; id=${id//[[:space:]]/}
     [[ -n $id ]] && PRESET_SET[$id]=1
   done <"$f"
@@ -214,15 +215,21 @@ select_features() {
 }
 
 prompt_features() {
-  local id
+  local id dropped=""
   for id in "${FEATURE_IDS[@]}"; do
     feature_selected "$id" || continue
     declare -F "prompt_$id" >/dev/null || continue
     if ! "prompt_$id"; then
       log_warn "$(t prompt.skipped "$(t "feat.$id.title")")"
+      dropped+="  - $(t "feat.$id.title")"$'\n'
       unset "SELECTED_SET[$id]"
     fi
   done
+  # Dialog whiptail menghapus pesan log di atas, jadi tampilkan daftar fitur yang gugur
+  # secara eksplisit. Sebelumnya fitur terpilih bisa hilang tanpa kabar.
+  if [[ -n $dropped ]]; then
+    ui_msg "$(t prompt.dropped.title)" "$(t prompt.dropped.text "$dropped")"
+  fi
   if (( ${#SELECTED_SET[@]} == 0 )); then log_info "$(t select.none)"; exit 0; fi
 }
 

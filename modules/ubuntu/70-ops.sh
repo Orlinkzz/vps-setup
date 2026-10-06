@@ -13,6 +13,15 @@ _has_postgres() { command -v psql >/dev/null 2>&1; }
 _has_mysql()    { command -v mysql >/dev/null 2>&1; }
 _has_nginx()    { command -v nginx >/dev/null 2>&1; }
 
+# "Sudah ada ATAU akan dipasang di run ini". Prompt berjalan sebelum instalasi, jadi cek
+# binary saja membuat fitur yang bergantung pada webserver/DB di run yang sama gugur diam-diam.
+_nginx_ready() {
+  _has_nginx || { feature_selected webserver && [[ ${CFG[webserver]:-} == nginx ]]; }
+}
+_db_ready() {
+  _has_postgres || _has_mysql || feature_selected postgresql || feature_selected mysql
+}
+
 _backup_dir() {
   local dir="$BACKUP_ROOT/db"
   install -d -m 750 "$dir"
@@ -30,7 +39,7 @@ prompt_db_backup() {
   local title
   title=$(t feat.db_backup.title)
 
-  if ! _has_postgres && ! _has_mysql; then
+  if ! _db_ready; then
     ui_msg "$title" "$(t ops.backup.no_db)"
     return 1
   fi
@@ -104,7 +113,7 @@ summary_db_backup() { t sum.backup "${CFG[backup_retention]:-7}"; }
 
 # ============================================================ Monitoring
 prompt_monitoring() {
-  if _has_postgres || _has_mysql; then
+  if _db_ready; then
     CFG[monitor_db]=1
   else
     CFG[monitor_db]=0
@@ -172,7 +181,7 @@ notes_monitoring()   { t note.monitor; echo; }
 
 # ============================================================ Nginx fail2ban jails
 prompt_nginx_jails() {
-  if ! _has_nginx; then
+  if ! _nginx_ready; then
     ui_msg "$(t feat.nginx_jails.title)" "$(t ops.jails.no_nginx)"
     return 1
   fi

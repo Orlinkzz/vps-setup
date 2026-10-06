@@ -5,7 +5,41 @@
 UI_W=76
 BACKTITLE="VPS Setup"
 
+# Palet warna eksplisit. Tanpa ini whiptail memakai palet bawaan newt (tombol, judul dan
+# item terpilih berwarna "red") yang di banyak tema terminal tampil pink/magenta.
+# Hormati NEWT_COLORS / NEWT_COLORS_FILE bila user sudah mengatur sendiri.
+ui_colors() {
+  [[ -n ${NEWT_COLORS:-} || -n ${NEWT_COLORS_FILE:-} ]] && return 0
+  [[ ${VPS_SETUP_COLORS:-} == default ]] && return 0
+  export NEWT_COLORS='
+    root=white,black
+    roottext=cyan,black
+    border=cyan,black
+    window=white,black
+    shadow=black,black
+    title=cyan,black
+    label=white,black
+    textbox=white,black
+    acttextbox=black,cyan
+    button=black,white
+    actbutton=black,cyan
+    compactbutton=white,black
+    checkbox=white,black
+    actcheckbox=black,cyan
+    entry=white,black
+    disentry=gray,black
+    listbox=white,black
+    actlistbox=white,black
+    sellistbox=cyan,black
+    actsellistbox=black,cyan
+    helpline=black,cyan
+    emptyscale=,gray
+    fullscale=,cyan
+  '
+}
+
 ui_init() {
+  ui_colors
   local cols
   cols=$(tput cols 2>/dev/null || echo 80)
   UI_W=$(( cols - 6 ))

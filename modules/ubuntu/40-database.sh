@@ -47,7 +47,7 @@ run_postgresql() {
   local share=$(_db_share) pg_ver pg_conf
   pkg_install postgresql postgresql-contrib libpq-dev
 
-  pg_ver=$(find /etc/postgresql -maxdepth 1 -name '[0-9]*' -type d 2>/dev/null | head -n 1)
+  pg_ver=$(find /etc/postgresql -maxdepth 1 -name '[0-9]*' -type d 2>/dev/null | head -n 1 || true)
   pg_ver=$(basename "$pg_ver" 2>/dev/null || dpkg -l | sed -n 's/^ii.*postgresql-\([0-9]*\).*/\1/p' | head -n 1)
   [[ -z $pg_ver ]] && pg_ver=16
 
@@ -211,8 +211,9 @@ prompt_create_database() {
   fi
 
   # Detect installed engines
+  # Engine yang sudah ada ATAU dipilih di run ini (run_create_database berjalan setelah instalasi DB)
   for e in postgresql mysql; do
-    db_installed "$e" && engines+=("$e")
+    if db_installed "$e" || feature_selected "$e"; then engines+=("$e"); fi
   done
 
   if (( ${#engines[@]} == 0 )); then
