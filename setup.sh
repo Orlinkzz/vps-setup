@@ -5,7 +5,7 @@
 # =============================================================================
 set -uo pipefail
 
-VERSION="0.6.0"
+VERSION="0.6.2"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PATH="$PATH:/usr/sbin:/sbin:/usr/local/sbin"
 
