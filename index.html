@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vps-setup — Setup server Linux baru lewat menu interaktif</title>
+<meta name="description" content="Setup interaktif yang ramah pemula untuk server Linux baru. Pilih dari menu, jawab beberapa pertanyaan, review, jalan.">
+<meta property="og:title" content="vps-setup">
+<meta property="og:description" content="Setup server Linux baru tanpa hafal perintah. Pilih dari menu, review, jalan.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://orlinkzz.github.io/vps-setup/">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=JetBrains+Mono:wght@400;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --fog:#eef2f6; --paper:#fff; --ink:#14202b; --muted:#566574; --line:#d5dde5;
+  --navy:#0f1b2d; --navy2:#17263d; --amber:#ffb547; --blue:#2f5bea; --mint:#59d6a4;
+  --display:"Bricolage Grotesque",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{overflow-x:hidden}
+img,svg{max-width:100%}
+body{margin:0;background:var(--fog);color:var(--ink);font:400 1.0625rem/1.65 var(--body);-webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+header.top{display:flex;justify-content:space-between;align-items:center;padding:22px 0}
+.logo{font:800 1.25rem var(--display);color:var(--ink);text-decoration:none;letter-spacing:-.01em}
+.logo span{color:var(--blue)}
+nav a{margin-left:22px;color:var(--muted);text-decoration:none;font-weight:500;font-size:.95rem}
+nav a:hover{color:var(--ink)}
+.gh{background:var(--ink);color:#fff!important;padding:8px 16px;border-radius:999px}
+
+.hero>*{min-width:0}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:48px;align-items:center;padding:48px 0 72px}
+h1{font:800 clamp(2.4rem,5.2vw,3.9rem)/1.02 var(--display);letter-spacing:-.03em;margin:0 0 20px}
+.lead{font-size:1.2rem;color:var(--muted);max-width:30em;margin:0 0 28px}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--navy);color:#e8eef7;border-radius:12px;padding:12px 12px 12px 18px;font:400 .88rem var(--mono);max-width:100%}
+.cmd{min-width:0;width:100%}
+.cmd code{overflow-x:auto;white-space:pre;flex:1 1 auto;min-width:0;scrollbar-width:none}
+.cmd code::-webkit-scrollbar{display:none}
+.cmd .p{color:var(--amber)}
+button.copy{font:600 .8rem var(--body);background:var(--amber);color:#2b1c00;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;flex:none}
+button.copy:hover{filter:brightness(1.06)}
+.small{font-size:.9rem;color:var(--muted);margin-top:12px}
+
+.term{background:var(--navy);border-radius:16px;box-shadow:0 30px 60px -25px rgba(15,27,45,.55);overflow:hidden}
+.term .bar{display:flex;align-items:center;gap:7px;padding:12px 16px;background:var(--navy2)}
+.term .bar i{width:11px;height:11px;border-radius:50%;background:#3a4b66}
+.term .bar b{margin-left:auto;font:400 .75rem var(--mono);color:#7f93b0}
+.term pre{margin:0;padding:20px 22px 26px;min-height:340px;font:400 .84rem/1.75 var(--mono);color:#cfd9e8;white-space:pre-wrap}
+.term .a{color:var(--amber)} .term .g{color:var(--mint)} .term .d{color:#7f93b0}
+.cursor{display:inline-block;width:8px;height:1em;background:var(--amber);vertical-align:-2px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+section{padding:64px 0}
+section.white{background:var(--paper)}
+h2{font:800 clamp(1.7rem,3.2vw,2.4rem)/1.12 var(--display);letter-spacing:-.02em;margin:0 0 14px}
+.sub{color:var(--muted);max-width:36em;margin:0 0 36px}
+
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;counter-reset:s}
+.steps li{counter-increment:s;padding:0 22px 0 0;position:relative}
+.steps li::before{content:counter(s);display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--blue);color:#fff;font:700 .95rem var(--display);margin-bottom:14px}
+.steps li:not(:last-child)::after{content:"";position:absolute;top:17px;left:44px;right:10px;height:2px;background:var(--line)}
+.steps h3{font:700 1.1rem var(--display);margin:0 0 4px}
+.steps p{margin:0;color:var(--muted);font-size:.97rem}
+
+.cmds>*,.safe>*,.steps>*{min-width:0}
+.cmds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.card{background:var(--fog);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h3{font:700 1.1rem var(--display);margin:0 0 4px}
+.card p{margin:0 0 14px;color:var(--muted);font-size:.96rem}
+.card .cmd{font-size:.8rem}
+.card.wide{grid-column:1/-1}
+
+.safe{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px}
+.safe h3{font:700 1.15rem var(--display);margin:0 0 6px}
+.safe p{margin:0;color:var(--muted)}
+.safe code,.card code.i,p code{font:400 .86em var(--mono);background:#e3e9f0;padding:2px 6px;border-radius:5px}
+
+.ops{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.ops span{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:7px 15px;font-size:.93rem;font-weight:500}
+
+.cta{background:var(--navy);color:#fff;border-radius:22px;padding:48px;display:flex;justify-content:space-between;align-items:center;gap:28px;flex-wrap:wrap}
+.cta h2{margin:0 0 6px;color:#fff}
+.cta p{margin:0;color:#a9b8cf}
+.cta a.btn{background:var(--amber);color:#2b1c00;text-decoration:none;font-weight:700;padding:14px 26px;border-radius:12px}
+p,li,h1,h2,h3{overflow-wrap:break-word}
+.ops span{max-width:100%}
+footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center}
+
+@media(max-width:900px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:36px;padding-top:24px}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:32px}
+  .steps li::after{display:none}
+  .cmds,.safe{grid-template-columns:minmax(0,1fr)}
+  nav a:not(.gh){display:none}
+  .cta{padding:32px 24px}
+}
+@media(max-width:560px){
+  .wrap{padding:0 16px}
+  header.top{padding:16px 0}
+  .steps{grid-template-columns:minmax(0,1fr)}
+  .term pre{font-size:.74rem;min-height:300px;padding:16px}
+  .cmd{font-size:.76rem;padding:10px 10px 10px 14px}
+  .card{padding:18px}
+  section{padding:48px 0}
+  .cta{padding:28px 20px;border-radius:16px}
+  .cta a.btn{width:100%;text-align:center}
+  .lead{font-size:1.06rem}
+}
+@media(prefers-reduced-motion:reduce){.cursor{animation:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="logo" href="#">vps<span>-</span>setup</a>
+    <nav>
+      <a href="#cara">Cara pakai</a>
+      <a href="#perintah">Perintah</a>
+      <a href="#aman">Keamanan</a>
+      <a class="gh" href="https://github.com/Orlinkzz/vps-setup">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>Server baru, tanpa hafal perintah.</h1>
+      <p class="lead">Setup interaktif untuk server Linux yang baru dibeli. Pilih dari menu, jawab beberapa pertanyaan sederhana, review, lalu jalan.</p>
+      <div class="cmd">
+        <code id="main-cmd"><span class="p">$</span> curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash</code>
+        <button class="copy" data-target="main-cmd" data-text="curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash">Salin</button>
+      </div>
+      <p class="small">Lebih suka cek dulu isinya? Pakai <a href="#perintah">git clone</a> atau mode <code>--dry-run</code>.</p>
+    </div>
+
+    <div class="term" aria-label="Contoh tampilan menu vps-setup">
+      <div class="bar"><i></i><i></i><i></i><b>ilustrasi tampilan</b></div>
+      <pre id="term" aria-live="off"></pre>
+    </div>
+  </div>
+</div>
+
+<section class="white" id="cara">
+  <div class="wrap">
+    <h2>Empat langkah, tanpa tebak-tebakan</h2>
+    <p class="sub">Kamu yang pegang kendali. Tidak ada yang berubah di server sebelum kamu setuju.</p>
+    <ol class="steps">
+      <li><h3>Jalankan</h3><p>Install lewat satu baris perintah, atau clone repo lalu jalankan <code>setup.sh</code>.</p></li>
+      <li><h3>Pilih dari menu</h3><p>Centang yang kamu butuhkan: web server, database, domain, dan lainnya.</p></li>
+      <li><h3>Jawab pertanyaan</h3><p>Hanya pertanyaan sederhana, seperti nama domain atau nama database.</p></li>
+      <li><h3>Review lalu jalan</h3><p>Lihat ringkasan dulu. Kalau sudah sesuai, lanjutkan.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="perintah">
+  <div class="wrap">
+    <h2>Perintah yang paling sering dipakai</h2>
+    <p class="sub">Semua opsi ada di repo. Ini yang paling berguna untuk mulai.</p>
+    <div class="cmds">
+      <div class="card">
+        <h3>Clone dan jalankan</h3>
+        <p>Cara yang direkomendasikan kalau kamu mau baca skripnya dulu.</p>
+        <div class="cmd"><code id="c1"><span class="p">$</span> git clone https://github.com/orlinkzz/vps-setup.git
+<span class="p">$</span> cd vps-setup &amp;&amp; sudo ./setup.sh</code><button class="copy" data-target="c1" data-text="git clone https://github.com/orlinkzz/vps-setup.git&#10;cd vps-setup &amp;&amp; sudo ./setup.sh">Salin</button></div>
+      </div>
+      <div class="card">
+        <h3>Preview tanpa mengubah apa pun</h3>
+        <p>Mode <code>--dry-run</code> hanya menampilkan apa yang akan dilakukan.</p>
+        <div class="cmd"><code id="c2"><span class="p">$</span> sudo ./setup.sh --dry-run</code><button class="copy" data-target="c2" data-text="sudo ./setup.sh --dry-run">Salin</button></div>
+      </div>
+      <div class="card">
+        <h3>Pakai Bahasa Indonesia</h3>
+        <p>Menu dan pertanyaannya tampil dalam Bahasa Indonesia.</p>
+        <div class="cmd"><code id="c3"><span class="p">$</span> sudo ./setup.sh --lang id</code><button class="copy" data-target="c3" data-text="sudo ./setup.sh --lang id">Salin</button></div>
+      </div>
+      <div class="card">
+        <h3>Tambah website nanti</h3>
+        <p>Server sudah jalan? Tambah domain baru kapan saja.</p>
+        <div class="cmd"><code id="c4"><span class="p">$</span> sudo ./setup.sh --add-domain</code><button class="copy" data-target="c4" data-text="sudo ./setup.sh --add-domain">Salin</button></div>
+      </div>
+      <div class="card">
+        <h3>Buat database nanti</h3>
+        <p>Tambah database baru lewat menu interaktif.</p>
+        <div class="cmd"><code id="c5"><span class="p">$</span> sudo ./setup.sh --add-database</code><button class="copy" data-target="c5" data-text="sudo ./setup.sh --add-database">Salin</button></div>
+      </div>
+      <div class="card">
+        <h3>Mode otomatis untuk skrip</h3>
+        <p>Lewati pertanyaan dengan preset, misalnya database PostgreSQL.</p>
+        <div class="cmd"><code id="c6"><span class="p">$</span> sudo ./setup.sh --yes --preset database --engine postgresql --db myapp</code><button class="copy" data-target="c6" data-text="sudo ./setup.sh --yes --preset database --engine postgresql --db myapp">Salin</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="white" id="aman">
+  <div class="wrap">
+    <h2>Aman dicoba, gampang dibatalkan</h2>
+    <p class="sub">Mengubah konfigurasi server itu menakutkan. Makanya ada pengaman di setiap sisi.</p>
+    <div class="safe">
+      <div><h3>File dibackup</h3><p>File yang diganti disimpan ke <code>/var/backups/vps-setup/</code>. File hanya ditulis ulang kalau isinya memang berubah.</p></div>
+      <div><h3>Semua tercatat</h3><p>Setiap langkah masuk ke <code>/var/log/vps-setup.log</code>. Password tidak pernah ikut dicatat.</p></div>
+      <div><h3>Bisa rollback</h3><p>Skrip uninstall menghapus semua file dan konfigurasi yang dibuat vps-setup, dan mengembalikan file dari backup bila perlu.</p></div>
+    </div>
+    <h3 style="font:700 1.15rem var(--display);margin:48px 0 4px">Sekalian urusan operasional</h3>
+    <p class="sub" style="margin-bottom:12px">Selain setup awal, ada bekal untuk menjaga server tetap sehat.</p>
+    <div class="ops">
+      <span>Backup database dengan rotasi</span>
+      <span>Health monitoring (vps-setup-health)</span>
+      <span>Jail fail2ban untuk Nginx: http-auth, botsearch, bad-request</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="cta">
+      <div>
+        <h2>Siap setup server pertamamu?</h2>
+        <p>Open source. Baca kodenya, coba, kasih masukan.</p>
+      </div>
+      <a class="btn" href="https://github.com/Orlinkzz/vps-setup">Buka di GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">vps-setup oleh <a href="https://github.com/Orlinkzz">Orlinkzz</a>. Halaman ini hanya landing page; dokumentasi lengkap ada di repo.</div>
+</footer>
+
+<script>
+// Salin perintah
+document.querySelectorAll('button.copy').forEach(function(b){
+  b.addEventListener('click',function(){
+    var t=b.getAttribute('data-text');
+    var done=function(){var o=b.textContent;b.textContent='Tersalin';setTimeout(function(){b.textContent=o},1500)};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,done)}
+    else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy')}catch(e){}document.body.removeChild(a);done()}
+  });
+});
+
+// Terminal ilustrasi
+var term=document.getElementById('term');
+var lines=[
+ '<span class="a">$</span> sudo ./setup.sh --lang id',
+ '',
+ '<span class="g">vps-setup</span> <span class="d">- setup server Linux</span>',
+ '',
+ '  Pilih yang mau dipasang:',
+ '  <span class="g">[x]</span> Web server',
+ '  <span class="g">[x]</span> Database',
+ '  <span class="g">[x]</span> Firewall + fail2ban',
+ '  <span class="d">[ ]</span> Domain tambahan',
+ '',
+ '<span class="a">?</span> Nama domain: <span class="g">contoh.com</span>',
+ '<span class="a">?</span> Lanjutkan setelah review? <span class="g">ya</span>',
+ '',
+ '<span class="g">Selesai.</span> <span class="d">Log: /var/log/vps-setup.log</span> <span class="cursor"></span>'
+];
+var full=lines.join('\n');
+var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduce){term.innerHTML=full}
+else{
+  var i=0;
+  (function step(){
+    i++;
+    term.innerHTML=lines.slice(0,i).join('\n');
+    if(i<lines.length){setTimeout(step,i<3?500:380)}
+  })();
+}
+</script>
+</body>
+</html>
