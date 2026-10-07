@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 6 * * 1"   # every Monday
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh tests/*.sh
+
+  tests:
+    name: Unit, feature, dry-run and template tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx-light openssl
+      - run: bash tests/unit.sh
+      - run: bash tests/features.sh
+      - run: bash tests/dry-run.sh   # syntax, i18n key coverage, every server x site type
+      - run: NO_LIVE=1 bash tests/templates.sh
+
+  integration:
+    name: Real nginx + apache run (twice)
+    runs-on: ubuntu-24.04            # a throw-away VM, so the destructive test is safe here
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx-light apache2 curl python3 openssl
+      - name: Free port 80 (the test starts the servers itself)
+        run: sudo systemctl stop nginx apache2 || true
+      - run: sudo DISPOSABLE=1 bash tests/integration.sh
