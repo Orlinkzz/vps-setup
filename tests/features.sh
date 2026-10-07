@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# shellcheck disable=SC2015,SC2329,SC2016  # "A && pass || bad" is an if/else; stubs are called by the sourced code; single quotes are intentional
+# shellcheck disable=SC2015,SC2016,SC2317,SC2329  # "A && pass || bad" is an if/else; stubs are called by the sourced code (SC2317 = shellcheck <=0.9, SC2329 = >=0.10); single quotes are intentional
 # Feature-level tests: preset parsing, prompts that depend on other features, port-80 mapping,
 # WSL detection and the fail2ban filter regex. No root, no changes to the system.
 set -uo pipefail

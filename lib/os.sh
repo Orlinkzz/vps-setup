@@ -70,7 +70,7 @@ is_wsl() { [[ -n ${WSL_DISTRO_NAME:-} ]] || grep -qi microsoft /proc/version 2>/
 primary_ip() {
   local ip
   ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}') || true
-  [[ -z $ip ]] && ip=$(hostname -I 2>/dev/null | awk '{print $1}') || true
+  if [[ -z $ip ]]; then ip=$(hostname -I 2>/dev/null | awk '{print $1}') || true; fi
   printf '%s' "${ip:-YOUR_SERVER_IP}"
 }
 

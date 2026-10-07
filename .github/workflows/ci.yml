@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - run: shellcheck --version | sed -n 2p
       - run: shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh tests/*.sh
 
   tests:
@@ -28,14 +29,28 @@ jobs:
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
       - run: bash tests/dry-run.sh   # syntax, i18n key coverage, every server x site type
-      - run: NO_LIVE=1 bash tests/templates.sh
+      - run: sudo env NO_LIVE=1 bash tests/templates.sh   # needs root: nginx -t opens /var/log/nginx
 
   integration:
     name: Real nginx + apache run (twice)
     runs-on: ubuntu-24.04            # a throw-away VM, so the destructive test is safe here
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx-light apache2 curl python3 openssl
+      - name: Install the web servers without starting them
+        # On a runner with systemd the packages start themselves on port 80; the second one then
+        # fails to bind, its postinst fails and apt exits non-zero. policy-rc.d (101) forbids that.
+        run: |
+          printf '#!/bin/sh\nexit 101\n' | sudo tee /usr/sbin/policy-rc.d >/dev/null
+          sudo chmod +x /usr/sbin/policy-rc.d
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nginx-light apache2 curl python3 openssl
+          sudo rm -f /usr/sbin/policy-rc.d
       - name: Free port 80 (the test starts the servers itself)
         run: sudo systemctl stop nginx apache2 || true
-      - run: sudo DISPOSABLE=1 bash tests/integration.sh
+      - run: sudo env DISPOSABLE=1 bash tests/integration.sh
+      - name: Show logs when the run failed
+        if: failure()
+        run: |
+          for f in /tmp/vps-int.out /tmp/vps-int2.out /var/log/vps-setup.log; do
+            echo "::group::$f"; sudo tail -n 80 "$f" 2>/dev/null || echo "(missing)"; echo "::endgroup::"
+          done
