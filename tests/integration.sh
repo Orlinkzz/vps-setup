@@ -3,6 +3,9 @@
 # Runs the REAL (non-dry-run) web server + add-domain code against an installed nginx/apache,
 # with a fake systemctl so it works in containers. DESTRUCTIVE: rewrites /etc/nginx, /etc/apache2
 # and /var/www. Only run in a disposable container/VM:   DISPOSABLE=1 bash tests/integration.sh
+# NOTE: on a systemd host (e.g. a GitHub runner) "apachectl start" itself calls "systemctl start
+# apache2", which would hit the fake systemctl below again and recurse forever. Setting
+# APACHE_STARTED_BY_SYSTEMD=1 makes apachectl start httpd directly instead.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 [[ ${DISPOSABLE:-0} == 1 && $EUID == 0 ]] || { echo "skipped (needs root and DISPOSABLE=1)"; exit 0; }
@@ -15,7 +18,7 @@ svc=$2; [ "$svc" = "--quiet" ] && svc=$3
 proc=$svc; [ "$svc" = "apache2" ] && proc=apache2
 case "$1" in
   is-active) pgrep -x "$proc" >/dev/null ;;
-  start|restart) case "$svc" in nginx) nginx ;; apache2) apachectl start ;; esac ;;
+  start|restart) case "$svc" in nginx) nginx ;; apache2) APACHE_STARTED_BY_SYSTEMD=1 apachectl start ;; esac ;;
   reload) case "$svc" in nginx) nginx -s reload ;; apache2) apachectl graceful ;; esac ;;
   *) exit 0 ;;
 esac
