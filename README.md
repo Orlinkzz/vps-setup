@@ -44,6 +44,11 @@ The interface is **English by default**; you can pick **Bahasa Indonesia** on th
 | `--engine NAME` | With `--yes --preset database`: `postgresql` or `mysql` (default: postgresql) |
 | `--db NAME` | With `--yes --preset database`: database name to create |
 | `--db-user NAME` | With `--yes --preset database`: database user (defaults to `--db` value) |
+| `--list-sites` | List the websites vps-setup created (domain, server, type, HTTPS, status), then exit |
+| `--remove-domain DOMAIN` | Remove a website: its web server config, its Let's Encrypt certificate and (with `--purge-files`) its files |
+| `--purge-files`, `--keep-cert` | With `--remove-domain`: move `/var/www/DOMAIN` out of the way / keep the certificate |
+| `--list-databases` | List the PostgreSQL / MySQL databases, then exit |
+| `--drop-database NAME` | Drop a database (a compressed dump is saved first); add `--db-user` to drop that user too, `--engine` if both engines are installed |
 | `--webserver NAME` | With `--yes`: `nginx` (default), `caddy` or `apache` |
 | `--email ADDRESS` | Email for Let's Encrypt (handy with `--yes`) |
 | `--domain`, `--site-type`, `--port`, `--redirect-to` | With `--yes --preset domain`: describe the site to add |
@@ -56,7 +61,23 @@ sudo ./setup.sh --add-domain                  # add another website later
 sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy --port 3000
 sudo ./setup.sh --add-database               # create a database later
 sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
+sudo ./setup.sh --list-sites                  # what did I create?
+sudo ./setup.sh --remove-domain old.example.com            # asks first
+sudo ./setup.sh --yes --remove-domain old.example.com --purge-files
+sudo ./setup.sh --list-databases
+sudo ./setup.sh --drop-database myapp --db-user myapp      # asks you to type the name
 ```
+
+### Removing things safely
+
+The removal commands are built so that a wrong command is recoverable:
+
+- **Only what vps-setup created is touched.** A site config must carry the `Managed by vps-setup` marker; anything else is refused. Stock files (`ssl.conf`, `00-default.conf`, ...) are never listed or removed.
+- **The web server is tested before it reloads.** If it rejects the configuration without the site, the old files are put back and nothing changes.
+- **Files are moved, not deleted.** `--purge-files` moves `/var/www/DOMAIN` to `/var/backups/vps-setup/removed-sites/`. A copy of the removed config goes to `/var/backups/vps-setup/` too.
+- **Certificates:** removed through `certbot delete`, unless another site still points at it (or you pass `--keep-cert`).
+- **Databases are dumped first** (`/var/backups/vps-setup/dropped-databases/NAME.ENGINE.TIMESTAMP.sql.gz`, mode 600); if the dump fails nothing is dropped. Interactively you must type the database name to confirm. Only letters, digits and `_` are accepted as names, and system databases/users (`postgres`, `mysql`, ...) are refused. The user is dropped only when you pass `--db-user`.
+- `--dry-run` shows every step without doing it.
 
 ## What it can do so far
 
@@ -199,6 +220,7 @@ Use `run`, `run_sh`, `write_file`, `pkg_install`, `svc_enable_now` — they resp
 bash tests/unit.sh        # validators, idempotent write_file
 bash tests/features.sh    # preset parsing, features that depend on others, port-80 flow, fail2ban regex
 bash tests/dry-run.sh     # syntax, i18n key coverage, dry runs (all servers x all site types)
+bash tests/manage.sh      # list/remove sites, list/drop databases (stubs + temp dirs, no root, touches nothing real)
 bash tests/templates.sh   # every template validated by nginx -t / apache2 -t / caddy validate,
                           # plus live HTTP checks on nginx (needs root; skips missing servers)
 bash tests/cloudflare.sh  # Cloudflare real-IP script vs the real nginx / Apache config testers (needs root)

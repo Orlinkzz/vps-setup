@@ -13,6 +13,7 @@ DRY_RUN=0
 ASSUME_YES=0
 LANG_CODE=""
 PRESET=""
+MANAGE=""          # list_sites | remove_domain | list_databases | drop_database (see lib/manage.sh)
 declare -a SELECTED=()
 declare -A PRESET_SET=()
 
@@ -22,6 +23,8 @@ source "$ROOT_DIR/lib/common.sh"
 source "$ROOT_DIR/lib/os.sh"
 # shellcheck source=lib/ui.sh
 source "$ROOT_DIR/lib/ui.sh"
+# shellcheck source=lib/manage.sh
+source "$ROOT_DIR/lib/manage.sh"
 # shellcheck source=lib/i18n/en.sh
 source "$ROOT_DIR/lib/i18n/en.sh"
 
@@ -48,6 +51,14 @@ Options:
   --engine NAME     With --yes --preset database: postgresql | mysql (default: postgresql)
   --db NAME         With --yes --preset database: database name to create
   --db-user NAME    With --yes --preset database: database user (defaults to --db value)
+  --list-sites      List the websites vps-setup created, then exit
+  --remove-domain D Remove website D: web server config (backed up), its Let's Encrypt
+                    certificate and, with --purge-files, its files (moved, never deleted)
+  --purge-files     With --remove-domain: move /var/www/D to /var/backups/vps-setup/removed-sites
+  --keep-cert       With --remove-domain: keep the Let's Encrypt certificate
+  --list-databases  List the PostgreSQL / MySQL databases, then exit
+  --drop-database N Drop database N (a compressed dump is saved first); add --db-user U to drop
+                    that user too, and --engine when both PostgreSQL and MySQL are installed
   -v, --version     Print version
   -h, --help        Show this help
 
@@ -60,6 +71,9 @@ Examples:
   sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy --port 3000
   sudo ./setup.sh --add-database           # create a database later
   sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
+  sudo ./setup.sh --list-sites
+  sudo ./setup.sh --remove-domain old.example.com --purge-files
+  sudo ./setup.sh --drop-database myapp --db-user myapp
 EOF
 }
 
@@ -88,6 +102,12 @@ while (( $# )); do
                CFG[arg_engine]=$2; shift ;;
     --db)      [[ $# -ge 2 ]] || die "--db needs a value"; CFG[arg_db]=$2; shift ;;
     --db-user) [[ $# -ge 2 ]] || die "--db-user needs a value"; CFG[arg_db_user]=$2; shift ;;
+    --list-sites)     MANAGE=list_sites ;;
+    --remove-domain)  [[ $# -ge 2 ]] || die "--remove-domain needs a value"; MANAGE=remove_domain; CFG[arg_manage]=$2; shift ;;
+    --purge-files)    CFG[arg_purge]=1 ;;
+    --keep-cert)      CFG[arg_keep_cert]=1 ;;
+    --list-databases) MANAGE=list_databases ;;
+    --drop-database)  [[ $# -ge 2 ]] || die "--drop-database needs a value"; MANAGE=drop_database; CFG[arg_manage]=$2; shift ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
@@ -328,9 +348,37 @@ summary() {
   return 0
 }
 
+# ------------------------------------------------------------------ management commands
+# --list-sites, --remove-domain, --list-databases, --drop-database: no menus, no feature run.
+# Only the destructive ones need whiptail, and only when they have to ask (no --yes).
+manage_main() {
+  local rc=0
+  [[ -n $LANG_CODE ]] || LANG_CODE=en
+  case $MANAGE in
+    remove_domain|drop_database) ensure_whiptail ;;
+  esac
+  ui_init
+  choose_language
+  detect_os || die "$(t err.os_unsupported "unknown")"
+  os_check || rc=$?
+  case $rc in
+    2) die "$(t err.os_unsupported "$OS_PRETTY")" ;;
+    1) log_warn "$(t warn.os_untested "$OS_PRETTY")" ;;
+  esac
+  load_modules
+  detect_hw
+  case $MANAGE in
+    list_sites)     list_sites ;;
+    list_databases) list_databases ;;
+    remove_domain)  remove_domain "${CFG[arg_manage]}" ;;
+    drop_database)  drop_database "${CFG[arg_manage]}" ;;
+  esac
+}
+
 # ------------------------------------------------------------------ main
 main() {
   preflight_root
+  if [[ -n $MANAGE ]]; then manage_main; return "$?"; fi
   if (( ASSUME_YES )) && [[ -z $PRESET ]]; then die "$(t err.yes_preset)"; fi
   ensure_whiptail
   ui_init
