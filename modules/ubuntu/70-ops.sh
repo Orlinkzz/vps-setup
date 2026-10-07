@@ -182,6 +182,22 @@ summary_monitoring() { t sum.monitor; }
 notes_monitoring()   { t note.monitor; echo; }
 
 # ============================================================ Nginx fail2ban jails
+# Older versions of this tool overwrote fail2ban's own nginx-botsearch filter with an
+# aggressive one (any 2 x 404 = 4h ban). Remove it and restore the packaged filter.
+_f2b_drop_custom_botsearch() {
+  local f=/etc/fail2ban/filter.d/nginx-botsearch.conf
+  grep -qs 'Managed by vps-setup' "$f" || return 0
+  backup_file "$f"
+  run rm -f "$f"
+  case "$OS_ID" in
+    almalinux|rocky|rhel|centos)
+      run dnf "${DNF_OPTS[@]}" -y reinstall fail2ban-server || log_warn "$(t ops.jails.restore_failed)" ;;
+    *)
+      run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -y install --reinstall \
+        -o Dpkg::Options::=--force-confmiss fail2ban || log_warn "$(t ops.jails.restore_failed)" ;;
+  esac
+}
+
 prompt_nginx_jails() {
   if ! _nginx_ready; then
     ui_msg "$(t feat.nginx_jails.title)" "$(t ops.jails.no_nginx)"
@@ -209,14 +225,15 @@ maxretry = 5
 bantime  = 1h
 findtime = 10m
 
+# Uses fail2ban's own nginx-botsearch filter (known scanner paths such as wp-login.php).
 [nginx-botsearch]
 enabled  = true
 port     = http,https
 filter   = nginx-botsearch
 logpath  = /var/log/nginx/error.log
-maxretry = 2
-bantime  = 4h
-findtime = 30m
+maxretry = 3
+bantime  = 2h
+findtime = 10m
 
 [nginx-bad-request]
 enabled   = true
@@ -225,24 +242,19 @@ filter    = nginx-bad-request
 logpath   = /var/log/nginx/access.log
 maxretry  = 10
 bantime   = 1h
-findtime  = 1m
+findtime  = 10m
 EOF
 
   # Create custom nginx-bad-request filter (blocks repeated 400/404/444 from same IP)
   write_file /etc/fail2ban/filter.d/nginx-bad-request.conf 644 <<'EOF'
-# Managed by vps-setup — blocks IPs that repeatedly hit bad requests
+# Managed by vps-setup — blocks IPs that keep sending malformed (400) or dropped (444) requests.
+# 404 is deliberately NOT counted: broken links, favicons and crawlers would ban real visitors.
 [Definition]
-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD|PUT|DELETE|CONNECT|OPTIONS|PATCH|PROPFIND|MKCOL|COPY|MOVE).*" (400|404|444|499) .*$
+failregex = ^<HOST> - \S+ \[[^\]]+\] "[^"]*" (400|444) \d+ .*$
 ignoreregex =
 EOF
 
-  # Create custom nginx-botsearch filter (scanner/robot detection)
-  write_file /etc/fail2ban/filter.d/nginx-botsearch.conf 644 <<'EOF'
-# Managed by vps-setup — blocks aggressive URL scanners
-[Definition]
-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD).*" (404|444) .*$
-ignoreregex =
-EOF
+  _f2b_drop_custom_botsearch
 
   svc_restart fail2ban
   log_ok "$(t ops.jails.done)"

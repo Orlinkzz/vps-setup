@@ -150,6 +150,20 @@ load_modules() {
   done
 }
 
+# Warn early when the machine is not a real server (WSL) or has no systemd.
+check_environment() {
+  local title text
+  if is_wsl; then
+    title=$(t env.wsl.title); text=$(t env.wsl.text)
+  elif ! has_systemd; then
+    title=$(t env.nosystemd.title); text=$(t env.nosystemd.text)
+  else
+    return 0
+  fi
+  if (( ASSUME_YES )); then log_warn "$text"; return 0; fi
+  ui_yesno "$title" "$text" no || quit_cancel
+}
+
 # ------------------------------------------------------------------ menus
 show_help() {
   local id text=""
@@ -324,6 +338,7 @@ main() {
   check_os
   load_modules
   detect_hw
+  check_environment
   welcome
   select_preset
   select_features
@@ -333,4 +348,5 @@ main() {
   summary
 }
 
-main "$@"
+# Run only when executed directly, so tests can source this file and call single functions.
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi

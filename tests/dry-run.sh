@@ -21,6 +21,7 @@ bash ./setup.sh --yes --dry-run --preset recommended --lang en --ssh-key \
   >/tmp/vps-dry.out 2>&1 || { echo "dry run FAILED"; tail -n 30 /tmp/vps-dry.out; fail=1; }
 
 # Regresi: fitur preset tidak boleh gugur diam-diam (mis. nginx_jails saat nginx baru dipasang di run yang sama)
+# shellcheck disable=SC2015  # the || branch is the failure report, it never runs after a success
 grep -q "Nginx fail2ban jails" /tmp/vps-dry.out && ! grep -q "^! Skipped:" /tmp/vps-dry.out \
   || { echo "REGRESSION: a selected feature was dropped"; grep "Skipped" /tmp/vps-dry.out; fail=1; }
 

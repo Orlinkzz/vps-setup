@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2178,SC2128  # "out" holds command output here; the array warning is a false positive
 # shellcheck disable=SC2015,SC2001  # pass() never fails, so "A && pass || bad" is a safe if/else
 # Renders every template and validates it with the web server's own config test.
 # Servers that are not installed are skipped. Run as root (nginx/caddy paths).

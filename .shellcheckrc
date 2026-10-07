@@ -1,6 +1,7 @@
 # SC2034: variables are shared across sourced files.
 # SC2031: intentional subshell reads.
 # SC2154: MSG[dotted.key]=... is an associative-array key, not an unassigned variable.
-disable=SC2034,SC2031,SC2154
+# SC2155: "local x=$(cmd)" is used where cmd cannot meaningfully fail (e.g. _db_share).
+disable=SC2034,SC2031,SC2154,SC2155
 external-sources=true
 source-path=SCRIPTDIR

@@ -28,14 +28,15 @@ maxretry = 5
 bantime  = 1h
 findtime = 10m
 
+# Uses fail2ban's own nginx-botsearch filter (known scanner paths such as wp-login.php).
 [nginx-botsearch]
 enabled  = true
 port     = http,https
 filter   = nginx-botsearch
 logpath  = /var/log/nginx/error.log
-maxretry = 2
-bantime  = 4h
-findtime = 30m
+maxretry = 3
+bantime  = 2h
+findtime = 10m
 
 [nginx-bad-request]
 enabled   = true
@@ -44,22 +45,18 @@ filter    = nginx-bad-request
 logpath   = /var/log/nginx/access.log
 maxretry  = 10
 bantime   = 1h
-findtime  = 1m
+findtime  = 10m
 EOF
 
   write_file /etc/fail2ban/filter.d/nginx-bad-request.conf 644 <<'EOF'
-# Managed by vps-setup — blocks IPs that repeatedly hit bad requests
+# Managed by vps-setup — blocks IPs that keep sending malformed (400) or dropped (444) requests.
+# 404 is deliberately NOT counted: broken links, favicons and crawlers would ban real visitors.
 [Definition]
-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD|PUT|DELETE|CONNECT|OPTIONS|PATCH|PROPFIND|MKCOL|COPY|MOVE).*" (400|404|444|499) .*$
+failregex = ^<HOST> - \S+ \[[^\]]+\] "[^"]*" (400|444) \d+ .*$
 ignoreregex =
 EOF
 
-  write_file /etc/fail2ban/filter.d/nginx-botsearch.conf 644 <<'EOF'
-# Managed by vps-setup — blocks aggressive URL scanners
-[Definition]
-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD).*" (404|444) .*$
-ignoreregex =
-EOF
+  _f2b_drop_custom_botsearch
 
   svc_restart fail2ban
   log_ok "$(t ops.jails.done)"

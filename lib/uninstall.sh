@@ -60,7 +60,19 @@ echo "  removed: sysctl + apt/dnf configs"
 
 # Fail2ban jails
 rm -f /etc/fail2ban/jail.d/00-vps-setup.local /etc/fail2ban/jail.d/10-vps-setup-nginx.local
-rm -f /etc/fail2ban/filter.d/nginx-bad-request.conf /etc/fail2ban/filter.d/nginx-botsearch.conf
+rm -f /etc/fail2ban/filter.d/nginx-bad-request.conf
+# nginx-botsearch.conf belongs to fail2ban itself. Only our OLD custom version (it carries the
+# marker) is removed, and the original is put back from backup when we have one.
+bot=/etc/fail2ban/filter.d/nginx-botsearch.conf
+if grep -qs 'Managed by vps-setup' "$bot"; then
+  rm -f "$bot"
+  orig=$(find "$BACKUP_DIR" -maxdepth 1 -name '_etc_fail2ban_filter.d_nginx-botsearch.conf.*' 2>/dev/null | sort | head -n 1)
+  if [[ -n $orig ]] && ! grep -qs 'Managed by vps-setup' "$orig"; then
+    cp -a "$orig" "$bot" && echo "  restored: $bot (from backup)"
+  else
+    echo "  NOTE: removed our old $bot; reinstall the fail2ban package to get the stock one back."
+  fi
+fi
 echo "  removed: fail2ban configs"
 
 # DB tuning (Debian paths + RHEL paths)
@@ -87,6 +99,25 @@ echo "  removed: frankenphp systemd service"
 # Default page
 rm -rf /var/www/_default
 echo "  removed: default page"
+
+# MySQL root login. NOT removed on purpose: root authenticates with this password now,
+# so deleting the file would lock you out of MySQL.
+if grep -qs 'Managed by vps-setup' /root/.my.cnf; then
+  echo "  NOTE: /root/.my.cnf holds the MySQL root login set by vps-setup. It was kept so you do not"
+  echo "        lose access. Remove it only after you have set a password you know."
+fi
+
+# Software installed outside the package manager (like packages, it stays)
+if [[ -d /opt/bun ]]; then
+  echo "  NOTE: Bun (/opt/bun) was not removed: sudo rm -rf /opt/bun /usr/local/bin/bun /usr/local/bin/bunx"
+fi
+
+# A service vps-setup stopped to free port 80
+stopped=$(sed -n 's/^web_stopped_unit=//p' /etc/vps-setup/settings.conf 2>/dev/null | tail -n 1)
+if [[ -n $stopped ]]; then
+  echo "  NOTE: vps-setup disabled the service '$stopped' to free port 80. To use it again:"
+  echo "    sudo systemctl enable --now $stopped"
+fi
 
 # Settings + state
 rm -rf /etc/vps-setup /var/lib/vps-setup

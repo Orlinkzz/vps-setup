@@ -24,6 +24,33 @@ port80_owner() {
   ss -ltnpH 'sport = :80' 2>/dev/null | grep -oE 'users:\(\("[^"]+"' | head -n 1 | sed -E 's/.*\("//; s/"$//' || true
 }
 
+# Which of our three web servers a process name on port 80 belongs to (empty = something else).
+_port80_web() {
+  case "$1" in
+    nginx) echo nginx ;;
+    apache2|httpd) echo apache ;;
+    caddy) echo caddy ;;
+  esac
+  return 0
+}
+
+# Port 80 is taken by something that is not the chosen web server: let the person decide
+# instead of silently dropping the whole step. Nothing is stopped here; the stop happens in
+# run_webserver, after the final review. With --yes the safe default (cancel) applies.
+_resolve_port80_conflict() {
+  local title=$1 owner=$2 unit="" action
+  local -a items=()
+  if has_systemd && systemctl cat "${owner}.service" >/dev/null 2>&1; then unit=$owner; fi
+  [[ -n $unit ]] && items+=(stop "$(t web.port_stop "$unit")")
+  items+=(ignore "$(t web.port_ignore)" cancel "$(t web.port_cancel)")
+  action=$(ui_menu "$title" "$(t web.port_busy "$owner")" cancel "${items[@]}") || return 1
+  case "$action" in
+    stop)   CFG[web_stop_unit]=$unit ;;
+    ignore) ;;
+    *)      return 1 ;;
+  esac
+}
+
 # ensure_acme_email <dialog title> — asks once, remembers in settings.
 ensure_acme_email() {
   local title=$1 cur email
@@ -119,16 +146,11 @@ prompt_webserver() {
   choice=$(ui_menu "$title" "$(t web.ask)" "$def" \
     nginx "$(t web.nginx)" caddy "$(t web.caddy)" apache "$(t web.apache)") || return 1
 
+  CFG[web_stop_unit]=""
   owner=$(port80_owner)
-  case "$owner" in
-    ""|nginx|apache2|caddy)
-      if [[ -n $owner ]]; then
-        local mapped=$owner
-        [[ $owner == apache2 ]] && mapped=apache
-        if [[ $mapped != "$choice" ]]; then ui_msg "$title" "$(t web.port_busy "$owner" "$owner")"; return 1; fi
-      fi ;;
-    *) ui_msg "$title" "$(t web.port_busy "$owner" "$owner")"; return 1 ;;
-  esac
+  if [[ -n $owner && $(_port80_web "$owner") != "$choice" ]]; then
+    _resolve_port80_conflict "$title" "$owner" || return 1
+  fi
 
   if ui_yesno "$title" "$(t web.ask_page)" yes; then CFG[web_catchall]=page; else CFG[web_catchall]=drop; fi
   [[ $choice == caddy ]] && { ensure_acme_email "$title" || return 1; }
@@ -223,6 +245,11 @@ run_webserver_caddy() {
 
 run_webserver() {
   local choice=${CFG[webserver]}
+  if [[ -n ${CFG[web_stop_unit]:-} ]]; then
+    log_info "$(t web.stopping "${CFG[web_stop_unit]}")"
+    run systemctl disable --now "${CFG[web_stop_unit]}"
+    setting_set web_stopped_unit "${CFG[web_stop_unit]}"
+  fi
   case "$choice" in
     nginx)  run_webserver_nginx  ;;
     apache) run_webserver_apache ;;

@@ -1,0 +1,696 @@
+From 2a10b9f46a2e92adf746b416d3b74269de09d9fd Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 7 Oct 2026 03:56:52 +0000
+Subject: [PATCH] Harden nginx jails, port 80 handling and secrets, and add
+ feature tests
+
+- Use fail2ban's own nginx-botsearch filter and stop counting 404s in
+  nginx-bad-request (400/444 only, 10 hits in 10 minutes). The old custom
+  filter is backed up and removed on re-run.
+- Warn when running inside WSL or without systemd.
+- Port 80 busy: let the user stop that service, continue, or skip the web
+  server step, instead of dropping the step. Treat httpd as Apache.
+- Keep the MySQL root login only in /root/.my.cnf (mode 600): not printed,
+  not logged, not kept in CFG. An existing /root/.my.cnf is left alone.
+- uninstall: never delete fail2ban's stock nginx-botsearch filter; keep
+  /root/.my.cnf, and print how to undo Bun in /opt/bun and a stopped service.
+- Add tests/features.sh (presets, feature dependencies, port 80 flow, jail
+  regex) and let setup.sh be sourced by tests.
+- Keep ShellCheck clean with the README command; document the changes.
+---
+ .shellcheckrc                  |   3 +-
+ README.md                      |  15 ++++-
+ lib/i18n/en.sh                 |  14 ++++-
+ lib/i18n/id.sh                 |  14 ++++-
+ lib/os.sh                      |   5 ++
+ lib/uninstall.sh               |  33 ++++++++++-
+ modules/almalinux/70-ops.sh    |  21 +++----
+ modules/debian/50-runtime.sh   |   1 +
+ modules/ubuntu/30-webserver.sh |  45 +++++++++++---
+ modules/ubuntu/40-database.sh  |  23 ++++----
+ modules/ubuntu/70-ops.sh       |  38 +++++++-----
+ setup.sh                       |  18 +++++-
+ tests/dry-run.sh               |   1 +
+ tests/features.sh              | 104 +++++++++++++++++++++++++++++++++
+ tests/templates.sh             |   1 +
+ 15 files changed, 281 insertions(+), 55 deletions(-)
+ create mode 100644 tests/features.sh
+
+diff --git a/.shellcheckrc b/.shellcheckrc
+index 295c537..f1eae75 100644
+--- a/.shellcheckrc
++++ b/.shellcheckrc
+@@ -1,6 +1,7 @@
+ # SC2034: variables are shared across sourced files.
+ # SC2031: intentional subshell reads.
+ # SC2154: MSG[dotted.key]=... is an associative-array key, not an unassigned variable.
+-disable=SC2034,SC2031,SC2154
++# SC2155: "local x=$(cmd)" is used where cmd cannot meaningfully fail (e.g. _db_share).
++disable=SC2034,SC2031,SC2154,SC2155
+ external-sources=true
+ source-path=SCRIPTDIR
+diff --git a/README.md b/README.md
+index 85da105..82879a7 100644
+--- a/README.md
++++ b/README.md
+@@ -60,7 +60,7 @@ sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
+ | Security | UFW firewall · Fail2ban · Automatic security updates |
+ | Databases | **PostgreSQL** · **MySQL/MariaDB** · **Redis** (all with RAM-based tuning) · **Create a database / user** wizard |
+ | Runtimes | **PHP-FPM** + Composer · **Node.js** · **Bun** · **Go** · **Python 3** · **Docker** + Compose · **FrankenPHP** |
+-| Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request) |
++| Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request; 404s are not counted, so normal visitors and crawlers are not banned) |
+ | Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard |
+ | Platforms | **Ubuntu 22.04 / 24.04** · **Debian 11 / 12** · **AlmaLinux / Rocky 8 / 9** (apt and dnf) |
+ 
+@@ -108,6 +108,10 @@ Good to know:
+ - **Idempotent.** Safe to run again; finished work is detected and skipped. Files are only rewritten when content changes, and replaced files are backed up to `/var/backups/vps-setup/`.
+ - **Logged.** Everything is written to `/var/log/vps-setup.log` (passwords are never logged).
+ - **Review before changes.** A summary screen lists exactly what will run.
++- **Warns when it is not a real server.** Inside WSL, or without systemd, it asks before going on (`--yes` only prints the warning).
++- **Port 80 already taken?** The web server step asks what to do: stop and disable that service, continue anyway, or skip the step. Nothing is stopped before the final review; with `--yes` the step is skipped.
++- **Nothing gets dropped silently.** If a selected item cannot be installed (cancelled, or a requirement is missing) a screen lists it before anything runs. Items that depend on another item chosen in the same run (e.g. Nginx jails with Nginx) work together.
++- **Secrets stay in files.** The generated MySQL root login is written to `/root/.my.cnf` (mode 600) and is not printed or logged.
+ 
+ > Your cloud provider may have its own firewall (security groups). Open the same ports there too.
+ 
+@@ -171,6 +175,7 @@ Use `run`, `run_sh`, `write_file`, `pkg_install`, `svc_enable_now` — they resp
+ 
+ ```bash
+ bash tests/unit.sh        # validators, idempotent write_file
++bash tests/features.sh    # preset parsing, features that depend on others, port-80 flow, fail2ban regex
+ bash tests/dry-run.sh     # syntax, i18n key coverage, dry runs (all servers x all site types)
+ bash tests/templates.sh   # every template validated by nginx -t / apache2 -t / caddy validate,
+                           # plus live HTTP checks on nginx (needs root; skips missing servers)
+@@ -191,8 +196,12 @@ sudo ./lib/uninstall.sh --yes      # non-interactive
+ ```
+ 
+ Replaced files are restored from `/var/backups/vps-setup/` if needed. A few things are
+-left alone deliberately (swap file, databases, users, packages) — the script prints the
+-exact commands to remove them yourself.
++left alone deliberately (swap file, databases, users, packages, Bun in `/opt/bun`, the MySQL
++root login in `/root/.my.cnf`, and a service that was stopped to free port 80) — the script prints
++the exact commands for each.
++
++Colors: the dialogs use a fixed palette. Set `NEWT_COLORS` to use your own, or
++`VPS_SETUP_COLORS=default` for whiptail's built-in colors.
+ 
+ ## Beginner guide
+ 
+diff --git a/lib/i18n/en.sh b/lib/i18n/en.sh
+index 5090593..23af96f 100644
+--- a/lib/i18n/en.sh
++++ b/lib/i18n/en.sh
+@@ -20,6 +20,10 @@ MSG[err.os_unsupported]="Sorry, %s is not supported yet. Currently supported: Ub
+ MSG[warn.os_untested]="%s has not been tested with this tool yet. It will probably work, but continue with care."
+ MSG[warn.apt_update]="apt update reported errors (a third-party repository may be broken). Continuing with the existing package lists."
+ MSG[msg.cancelled]="Cancelled. Nothing was changed."
++MSG[env.wsl.title]="Running inside WSL"
++MSG[env.wsl.text]="This looks like Windows Subsystem for Linux, not a real VPS.\n\nFirewall (UFW), Fail2ban, SSH hardening, swap and automatic updates are meant for a real server and may do nothing useful here, or fail.\n\nFor a realistic test use a disposable VM or a cheap VPS.\n\nContinue anyway?"
++MSG[env.nosystemd.title]="systemd is not running"
++MSG[env.nosystemd.text]="systemd is not running on this machine (container or minimal environment).\n\nServices cannot be enabled or restarted, so many steps will fail or be skipped.\n\nContinue anyway?"
+ 
+ MSG[welcome.title]="Welcome to VPS Setup"
+ MSG[welcome.text]="This tool prepares a fresh Linux server step by step.\n\nHow it works:\n  1. You pick what to set up\n  2. You answer a few simple questions\n  3. You review everything BEFORE anything changes\n\nGood to know:\n  - Detected: %s, %s MB RAM, %s CPU\n  - Safe to run again: finished steps are skipped\n  - Everything is logged to %s\n  - Keep this terminal open until the end"
+@@ -190,7 +194,11 @@ MSG[web.ask]="Which web server do you want to install?\n\nNginx: fast and the mo
+ MSG[web.nginx]="Nginx (recommended)"
+ MSG[web.caddy]="Caddy (automatic HTTPS)"
+ MSG[web.apache]="Apache"
+-MSG[web.port_busy]="Port 80 is already used by '%s'.\n\nA different web server would conflict with it. Stop or remove '%s' first, or choose that same web server."
++MSG[web.port_busy]="Port 80 is already used by '%s'.\n\nThe web server you picked would conflict with it. What do you want to do?"
++MSG[web.port_stop]="Stop and disable '%s', then install my choice"
++MSG[web.port_ignore]="Continue anyway (the new web server may fail to start)"
++MSG[web.port_cancel]="Skip the web server step"
++MSG[web.stopping]="Stopping '%s' to free port 80..."
+ MSG[web.ask_page]="What should visitors see when they open this server's IP address (or a domain that is not configured)?\n\nYes = a friendly 'Server is running' page (easier for testing).\nNo = close the connection (more private, browsers show an error)."
+ MSG[web.installing]="Installing %s..."
+ MSG[web.configured]="%s is installed and running"
+@@ -290,7 +298,8 @@ MSG[sum.wizard]="%s"
+ 
+ MSG[note.postgresql]="Connect:  sudo -u postgres psql"
+ MSG[note.mysql]="Connect:  sudo mysql"
+-MSG[note.mysql_root]="MySQL root password: %s  (also saved in /root/.my.cnf, so \"sudo mysql\" keeps working)"
++MSG[note.mysql_root]="MySQL root login is saved in /root/.my.cnf (readable by root only), so \"sudo mysql\" keeps working."
++MSG[db.mysql.keep_cnf]="Found an existing /root/.my.cnf, so the MySQL root login was left unchanged."
+ MSG[db.mysql.root_unchanged]="MySQL root password was not changed (root may already have one). Existing login kept."
+ MSG[note.redis]="Connect:  redis-cli"
+ 
+@@ -354,6 +363,7 @@ MSG[ops.backup.done]="Nightly DB backup script is ready (runs at 03:00)"
+ MSG[ops.monitor.creating]="Setting up health monitoring..."
+ MSG[ops.monitor.done]="Health monitoring is ready — run 'sudo vps-setup-health' to see a summary"
+ MSG[ops.jails.no_nginx]="Nginx was not detected on this server. Install Nginx first, then run this option again."
++MSG[ops.jails.restore_failed]="Could not restore fail2ban's stock nginx-botsearch filter. Reinstall the fail2ban package to get it back."
+ MSG[ops.jails.creating]="Adding nginx fail2ban jails..."
+ MSG[ops.jails.done]="Nginx fail2ban jails are active: http-auth, botsearch, bad-request"
+ 
+diff --git a/lib/i18n/id.sh b/lib/i18n/id.sh
+index 0d23cd8..8ddcf05 100644
+--- a/lib/i18n/id.sh
++++ b/lib/i18n/id.sh
+@@ -21,6 +21,10 @@ MSG[err.os_unsupported]="Maaf, %s belum didukung. Saat ini yang didukung: Ubuntu
+ MSG[warn.os_untested]="%s belum pernah diuji dengan tool ini. Kemungkinan besar tetap jalan, tapi lanjutkan dengan hati-hati."
+ MSG[warn.apt_update]="apt update melaporkan error (mungkin ada repository pihak ketiga yang rusak). Melanjutkan dengan daftar paket yang ada."
+ MSG[msg.cancelled]="Dibatalkan. Tidak ada yang diubah."
++MSG[env.wsl.title]="Berjalan di dalam WSL"
++MSG[env.wsl.text]="Ini tampaknya Windows Subsystem for Linux, bukan VPS sungguhan.\n\nFirewall (UFW), Fail2ban, hardening SSH, swap, dan update otomatis dibuat untuk server sungguhan dan bisa tidak berguna atau gagal di sini.\n\nUntuk uji coba yang realistis pakai VM sementara atau VPS murah.\n\nTetap lanjutkan?"
++MSG[env.nosystemd.title]="systemd tidak berjalan"
++MSG[env.nosystemd.text]="systemd tidak berjalan di mesin ini (container atau lingkungan minimal).\n\nLayanan tidak bisa di-enable atau di-restart, jadi banyak langkah akan gagal atau dilewati.\n\nTetap lanjutkan?"
+ 
+ MSG[welcome.title]="Selamat datang di VPS Setup"
+ MSG[welcome.text]="Tool ini menyiapkan server Linux baru Anda langkah demi langkah.\n\nCara kerjanya:\n  1. Anda memilih apa yang mau dipasang\n  2. Anda menjawab beberapa pertanyaan sederhana\n  3. Anda memeriksa semuanya SEBELUM ada yang berubah\n\nPerlu diketahui:\n  - Terdeteksi: %s, RAM %s MB, %s CPU\n  - Aman dijalankan ulang: langkah yang sudah selesai dilewati\n  - Semua dicatat di %s\n  - Jangan tutup terminal ini sampai selesai"
+@@ -181,7 +185,11 @@ MSG[web.ask]="Web server mana yang ingin dipasang?\n\nNginx: cepat dan paling po
+ MSG[web.nginx]="Nginx (disarankan)"
+ MSG[web.caddy]="Caddy (HTTPS otomatis)"
+ MSG[web.apache]="Apache"
+-MSG[web.port_busy]="Port 80 sudah dipakai oleh '%s'.\n\nWeb server lain akan bentrok. Hentikan atau hapus '%s' terlebih dulu, atau pilih web server yang sama."
++MSG[web.port_busy]="Port 80 sudah dipakai oleh '%s'.\n\nWeb server yang Anda pilih akan bentrok dengannya. Apa yang ingin Anda lakukan?"
++MSG[web.port_stop]="Hentikan dan nonaktifkan '%s', lalu pasang pilihan saya"
++MSG[web.port_ignore]="Lanjut saja (web server baru mungkin gagal start)"
++MSG[web.port_cancel]="Lewati langkah web server"
++MSG[web.stopping]="Menghentikan '%s' untuk membebaskan port 80..."
+ MSG[web.ask_page]="Apa yang harus dilihat pengunjung saat membuka alamat IP server ini (atau domain yang belum dikonfigurasi)?\n\nYa = halaman ramah 'Server is running' (lebih mudah untuk pengujian).\nTidak = koneksi ditutup (lebih privat, browser menampilkan error)."
+ MSG[web.installing]="Memasang %s..."
+ MSG[web.configured]="%s terpasang dan berjalan"
+@@ -281,7 +289,8 @@ MSG[sum.wizard]="%s"
+ 
+ MSG[note.postgresql]="Koneksi:  sudo -u postgres psql"
+ MSG[note.mysql]="Koneksi:  sudo mysql"
+-MSG[note.mysql_root]="Password root MySQL: %s  (juga disimpan di /root/.my.cnf, jadi \"sudo mysql\" tetap jalan)"
++MSG[note.mysql_root]="Login root MySQL disimpan di /root/.my.cnf (hanya bisa dibaca root), jadi \"sudo mysql\" tetap jalan."
++MSG[db.mysql.keep_cnf]="Ditemukan /root/.my.cnf yang sudah ada, jadi login root MySQL dibiarkan seperti semula."
+ MSG[db.mysql.root_unchanged]="Password root MySQL tidak diubah (root mungkin sudah punya password). Login lama dipertahankan."
+ MSG[note.redis]="Koneksi:  redis-cli"
+ 
+@@ -345,6 +354,7 @@ MSG[ops.backup.done]="Skrip backup DB malam hari siap (berjalan jam 03:00)"
+ MSG[ops.monitor.creating]="Menyiapkan pemantauan kesehatan..."
+ MSG[ops.monitor.done]="Pemantauan kesehatan siap — jalankan 'sudo vps-setup-health' untuk melihat ringkasan"
+ MSG[ops.jails.no_nginx]="Nginx tidak terdeteksi di server ini. Pasang Nginx dulu, lalu jalankan opsi ini lagi."
++MSG[ops.jails.restore_failed]="Filter nginx-botsearch bawaan fail2ban tidak bisa dipulihkan. Pasang ulang paket fail2ban untuk mengembalikannya."
+ MSG[ops.jails.creating]="Menambahkan jail fail2ban nginx..."
+ MSG[ops.jails.done]="Jail fail2ban Nginx aktif: http-auth, botsearch, bad-request"
+ 
+diff --git a/lib/os.sh b/lib/os.sh
+index b3cfb46..a7b99a9 100644
+--- a/lib/os.sh
++++ b/lib/os.sh
+@@ -64,6 +64,9 @@ nginx_filter() {
+ 
+ has_systemd() { [[ -d /run/systemd/system ]]; }
+ 
++# Windows Subsystem for Linux: not a real server (no public IP, firewall/SSH steps are meaningless).
++is_wsl() { [[ -n ${WSL_DISTRO_NAME:-} ]] || grep -qi microsoft /proc/version 2>/dev/null; }
++
+ primary_ip() {
+   local ip
+   ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}') || true
+@@ -132,6 +135,8 @@ pkg_name() {
+ # Install by Debian-style name, translating on RHEL family.
+ pkg_install_mapped() {
+   local p out=()
++  # Word splitting is intentional: pkg_name may map one name to several packages (gcc gcc-c++ make).
++  # shellcheck disable=SC2207
+   for p in "$@"; do out+=($(pkg_name "$p")); done
+   pkg_install "${out[@]}"
+ }
+diff --git a/lib/uninstall.sh b/lib/uninstall.sh
+index b880ae1..ca9aa87 100644
+--- a/lib/uninstall.sh
++++ b/lib/uninstall.sh
+@@ -60,7 +60,19 @@ echo "  removed: sysctl + apt/dnf configs"
+ 
+ # Fail2ban jails
+ rm -f /etc/fail2ban/jail.d/00-vps-setup.local /etc/fail2ban/jail.d/10-vps-setup-nginx.local
+-rm -f /etc/fail2ban/filter.d/nginx-bad-request.conf /etc/fail2ban/filter.d/nginx-botsearch.conf
++rm -f /etc/fail2ban/filter.d/nginx-bad-request.conf
++# nginx-botsearch.conf belongs to fail2ban itself. Only our OLD custom version (it carries the
++# marker) is removed, and the original is put back from backup when we have one.
++bot=/etc/fail2ban/filter.d/nginx-botsearch.conf
++if grep -qs 'Managed by vps-setup' "$bot"; then
++  rm -f "$bot"
++  orig=$(find "$BACKUP_DIR" -maxdepth 1 -name '_etc_fail2ban_filter.d_nginx-botsearch.conf.*' 2>/dev/null | sort | head -n 1)
++  if [[ -n $orig ]] && ! grep -qs 'Managed by vps-setup' "$orig"; then
++    cp -a "$orig" "$bot" && echo "  restored: $bot (from backup)"
++  else
++    echo "  NOTE: removed our old $bot; reinstall the fail2ban package to get the stock one back."
++  fi
++fi
+ echo "  removed: fail2ban configs"
+ 
+ # DB tuning (Debian paths + RHEL paths)
+@@ -88,6 +100,25 @@ echo "  removed: frankenphp systemd service"
+ rm -rf /var/www/_default
+ echo "  removed: default page"
+ 
++# MySQL root login. NOT removed on purpose: root authenticates with this password now,
++# so deleting the file would lock you out of MySQL.
++if grep -qs 'Managed by vps-setup' /root/.my.cnf; then
++  echo "  NOTE: /root/.my.cnf holds the MySQL root login set by vps-setup. It was kept so you do not"
++  echo "        lose access. Remove it only after you have set a password you know."
++fi
++
++# Software installed outside the package manager (like packages, it stays)
++if [[ -d /opt/bun ]]; then
++  echo "  NOTE: Bun (/opt/bun) was not removed: sudo rm -rf /opt/bun /usr/local/bin/bun /usr/local/bin/bunx"
++fi
++
++# A service vps-setup stopped to free port 80
++stopped=$(sed -n 's/^web_stopped_unit=//p' /etc/vps-setup/settings.conf 2>/dev/null | tail -n 1)
++if [[ -n $stopped ]]; then
++  echo "  NOTE: vps-setup disabled the service '$stopped' to free port 80. To use it again:"
++  echo "    sudo systemctl enable --now $stopped"
++fi
++
+ # Settings + state
+ rm -rf /etc/vps-setup /var/lib/vps-setup
+ echo "  removed: settings + state"
+diff --git a/modules/almalinux/70-ops.sh b/modules/almalinux/70-ops.sh
+index 316c48d..32afd4a 100644
+--- a/modules/almalinux/70-ops.sh
++++ b/modules/almalinux/70-ops.sh
+@@ -28,14 +28,15 @@ maxretry = 5
+ bantime  = 1h
+ findtime = 10m
+ 
++# Uses fail2ban's own nginx-botsearch filter (known scanner paths such as wp-login.php).
+ [nginx-botsearch]
+ enabled  = true
+ port     = http,https
+ filter   = nginx-botsearch
+ logpath  = /var/log/nginx/error.log
+-maxretry = 2
+-bantime  = 4h
+-findtime = 30m
++maxretry = 3
++bantime  = 2h
++findtime = 10m
+ 
+ [nginx-bad-request]
+ enabled   = true
+@@ -44,22 +45,18 @@ filter    = nginx-bad-request
+ logpath   = /var/log/nginx/access.log
+ maxretry  = 10
+ bantime   = 1h
+-findtime  = 1m
++findtime  = 10m
+ EOF
+ 
+   write_file /etc/fail2ban/filter.d/nginx-bad-request.conf 644 <<'EOF'
+-# Managed by vps-setup — blocks IPs that repeatedly hit bad requests
++# Managed by vps-setup — blocks IPs that keep sending malformed (400) or dropped (444) requests.
++# 404 is deliberately NOT counted: broken links, favicons and crawlers would ban real visitors.
+ [Definition]
+-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD|PUT|DELETE|CONNECT|OPTIONS|PATCH|PROPFIND|MKCOL|COPY|MOVE).*" (400|404|444|499) .*$
++failregex = ^<HOST> - \S+ \[[^\]]+\] "[^"]*" (400|444) \d+ .*$
+ ignoreregex =
+ EOF
+ 
+-  write_file /etc/fail2ban/filter.d/nginx-botsearch.conf 644 <<'EOF'
+-# Managed by vps-setup — blocks aggressive URL scanners
+-[Definition]
+-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD).*" (404|444) .*$
+-ignoreregex =
+-EOF
++  _f2b_drop_custom_botsearch
+ 
+   svc_restart fail2ban
+   log_ok "$(t ops.jails.done)"
+diff --git a/modules/debian/50-runtime.sh b/modules/debian/50-runtime.sh
+index 5d8760d..bda40fa 100644
+--- a/modules/debian/50-runtime.sh
++++ b/modules/debian/50-runtime.sh
+@@ -29,6 +29,7 @@ run_php_runtime() {
+   fi
+ 
+   local sock
++  # shellcheck disable=SC2012  # plain socket names; ls | head just picks the first one
+   sock=$(ls /run/php/php*-fpm.sock 2>/dev/null | head -n 1)
+   CFG[php_socket]=${sock:-/run/php/php-fpm.sock}
+   CFG[php_ver]=$ver
+diff --git a/modules/ubuntu/30-webserver.sh b/modules/ubuntu/30-webserver.sh
+index 082da8f..4b2a7c8 100644
+--- a/modules/ubuntu/30-webserver.sh
++++ b/modules/ubuntu/30-webserver.sh
+@@ -24,6 +24,33 @@ port80_owner() {
+   ss -ltnpH 'sport = :80' 2>/dev/null | grep -oE 'users:\(\("[^"]+"' | head -n 1 | sed -E 's/.*\("//; s/"$//' || true
+ }
+ 
++# Which of our three web servers a process name on port 80 belongs to (empty = something else).
++_port80_web() {
++  case "$1" in
++    nginx) echo nginx ;;
++    apache2|httpd) echo apache ;;
++    caddy) echo caddy ;;
++  esac
++  return 0
++}
++
++# Port 80 is taken by something that is not the chosen web server: let the person decide
++# instead of silently dropping the whole step. Nothing is stopped here; the stop happens in
++# run_webserver, after the final review. With --yes the safe default (cancel) applies.
++_resolve_port80_conflict() {
++  local title=$1 owner=$2 unit="" action
++  local -a items=()
++  if has_systemd && systemctl cat "${owner}.service" >/dev/null 2>&1; then unit=$owner; fi
++  [[ -n $unit ]] && items+=(stop "$(t web.port_stop "$unit")")
++  items+=(ignore "$(t web.port_ignore)" cancel "$(t web.port_cancel)")
++  action=$(ui_menu "$title" "$(t web.port_busy "$owner")" cancel "${items[@]}") || return 1
++  case "$action" in
++    stop)   CFG[web_stop_unit]=$unit ;;
++    ignore) ;;
++    *)      return 1 ;;
++  esac
++}
++
+ # ensure_acme_email <dialog title> — asks once, remembers in settings.
+ ensure_acme_email() {
+   local title=$1 cur email
+@@ -119,16 +146,11 @@ prompt_webserver() {
+   choice=$(ui_menu "$title" "$(t web.ask)" "$def" \
+     nginx "$(t web.nginx)" caddy "$(t web.caddy)" apache "$(t web.apache)") || return 1
+ 
++  CFG[web_stop_unit]=""
+   owner=$(port80_owner)
+-  case "$owner" in
+-    ""|nginx|apache2|caddy)
+-      if [[ -n $owner ]]; then
+-        local mapped=$owner
+-        [[ $owner == apache2 ]] && mapped=apache
+-        if [[ $mapped != "$choice" ]]; then ui_msg "$title" "$(t web.port_busy "$owner" "$owner")"; return 1; fi
+-      fi ;;
+-    *) ui_msg "$title" "$(t web.port_busy "$owner" "$owner")"; return 1 ;;
+-  esac
++  if [[ -n $owner && $(_port80_web "$owner") != "$choice" ]]; then
++    _resolve_port80_conflict "$title" "$owner" || return 1
++  fi
+ 
+   if ui_yesno "$title" "$(t web.ask_page)" yes; then CFG[web_catchall]=page; else CFG[web_catchall]=drop; fi
+   [[ $choice == caddy ]] && { ensure_acme_email "$title" || return 1; }
+@@ -223,6 +245,11 @@ run_webserver_caddy() {
+ 
+ run_webserver() {
+   local choice=${CFG[webserver]}
++  if [[ -n ${CFG[web_stop_unit]:-} ]]; then
++    log_info "$(t web.stopping "${CFG[web_stop_unit]}")"
++    run systemctl disable --now "${CFG[web_stop_unit]}"
++    setting_set web_stopped_unit "${CFG[web_stop_unit]}"
++  fi
+   case "$choice" in
+     nginx)  run_webserver_nginx  ;;
+     apache) run_webserver_apache ;;
+diff --git a/modules/ubuntu/40-database.sh b/modules/ubuntu/40-database.sh
+index 0196509..35fb4e9 100644
+--- a/modules/ubuntu/40-database.sh
++++ b/modules/ubuntu/40-database.sh
+@@ -100,22 +100,23 @@ run_mysql() {
+   pkg_install mysql-server
+ 
+   root_pass=$(_rand_pass)
+-  CFG[mysql_root_pass]=""
++  CFG[mysql_root_saved]=""
+ 
+-  # Set a root password. It is only reported/stored when the change really succeeded
+-  # (on re-runs root may already have one). Password goes via stdin, not the process list.
++  # Give root a password and keep it ONLY in /root/.my.cnf (mode 600): it is never shown on
++  # screen, logged or kept in memory-state files. The password goes to mysql through stdin,
++  # not through the process list. An existing /root/.my.cnf is the admin's own: leave root alone.
+   if (( ! DRY_RUN )); then
+-    if printf "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '%s';\n" "$root_pass" \
+-         | mysql 2>>"$LOG_FILE"; then
+-      CFG[mysql_root_pass]=$root_pass
+-      # Keep "sudo mysql" working now that root no longer uses auth_socket.
+-      if [[ ! -e /root/.my.cnf ]]; then
+-        write_file /root/.my.cnf 600 <<EOF
++    if [[ -e /root/.my.cnf ]]; then
++      log_info "$(t db.mysql.keep_cnf)"
++    elif printf "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '%s';\n" "$root_pass" \
++           | mysql 2>>"$LOG_FILE"; then
++      write_file /root/.my.cnf 600 <<EOF
++# Managed by vps-setup: MySQL root login (keeps "sudo mysql" working)
+ [client]
+ user=root
+ password="$root_pass"
+ EOF
+-      fi
++      CFG[mysql_root_saved]=1
+     else
+       log_warn "$(t db.mysql.root_unchanged)"
+     fi
+@@ -151,7 +152,7 @@ summary_mysql() {
+ 
+ notes_mysql() {
+   t note.mysql; echo
+-  if [[ -n ${CFG[mysql_root_pass]:-} ]]; then t note.mysql_root "${CFG[mysql_root_pass]}"; echo; fi
++  if [[ -n ${CFG[mysql_root_saved]:-} ]]; then t note.mysql_root; echo; fi
+   return 0
+ }
+ 
+diff --git a/modules/ubuntu/70-ops.sh b/modules/ubuntu/70-ops.sh
+index fe6199f..a79f4c0 100644
+--- a/modules/ubuntu/70-ops.sh
++++ b/modules/ubuntu/70-ops.sh
+@@ -182,6 +182,22 @@ summary_monitoring() { t sum.monitor; }
+ notes_monitoring()   { t note.monitor; echo; }
+ 
+ # ============================================================ Nginx fail2ban jails
++# Older versions of this tool overwrote fail2ban's own nginx-botsearch filter with an
++# aggressive one (any 2 x 404 = 4h ban). Remove it and restore the packaged filter.
++_f2b_drop_custom_botsearch() {
++  local f=/etc/fail2ban/filter.d/nginx-botsearch.conf
++  grep -qs 'Managed by vps-setup' "$f" || return 0
++  backup_file "$f"
++  run rm -f "$f"
++  case "$OS_ID" in
++    almalinux|rocky|rhel|centos)
++      run dnf "${DNF_OPTS[@]}" -y reinstall fail2ban-server || log_warn "$(t ops.jails.restore_failed)" ;;
++    *)
++      run env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -y install --reinstall \
++        -o Dpkg::Options::=--force-confmiss fail2ban || log_warn "$(t ops.jails.restore_failed)" ;;
++  esac
++}
++
+ prompt_nginx_jails() {
+   if ! _nginx_ready; then
+     ui_msg "$(t feat.nginx_jails.title)" "$(t ops.jails.no_nginx)"
+@@ -209,14 +225,15 @@ maxretry = 5
+ bantime  = 1h
+ findtime = 10m
+ 
++# Uses fail2ban's own nginx-botsearch filter (known scanner paths such as wp-login.php).
+ [nginx-botsearch]
+ enabled  = true
+ port     = http,https
+ filter   = nginx-botsearch
+ logpath  = /var/log/nginx/error.log
+-maxretry = 2
+-bantime  = 4h
+-findtime = 30m
++maxretry = 3
++bantime  = 2h
++findtime = 10m
+ 
+ [nginx-bad-request]
+ enabled   = true
+@@ -225,24 +242,19 @@ filter    = nginx-bad-request
+ logpath   = /var/log/nginx/access.log
+ maxretry  = 10
+ bantime   = 1h
+-findtime  = 1m
++findtime  = 10m
+ EOF
+ 
+   # Create custom nginx-bad-request filter (blocks repeated 400/404/444 from same IP)
+   write_file /etc/fail2ban/filter.d/nginx-bad-request.conf 644 <<'EOF'
+-# Managed by vps-setup — blocks IPs that repeatedly hit bad requests
++# Managed by vps-setup — blocks IPs that keep sending malformed (400) or dropped (444) requests.
++# 404 is deliberately NOT counted: broken links, favicons and crawlers would ban real visitors.
+ [Definition]
+-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD|PUT|DELETE|CONNECT|OPTIONS|PATCH|PROPFIND|MKCOL|COPY|MOVE).*" (400|404|444|499) .*$
++failregex = ^<HOST> - \S+ \[[^\]]+\] "[^"]*" (400|444) \d+ .*$
+ ignoreregex =
+ EOF
+ 
+-  # Create custom nginx-botsearch filter (scanner/robot detection)
+-  write_file /etc/fail2ban/filter.d/nginx-botsearch.conf 644 <<'EOF'
+-# Managed by vps-setup — blocks aggressive URL scanners
+-[Definition]
+-failregex = ^<HOST> - - \[.*\] "(GET|POST|HEAD).*" (404|444) .*$
+-ignoreregex =
+-EOF
++  _f2b_drop_custom_botsearch
+ 
+   svc_restart fail2ban
+   log_ok "$(t ops.jails.done)"
+diff --git a/setup.sh b/setup.sh
+index 4560911..6753f1e 100644
+--- a/setup.sh
++++ b/setup.sh
+@@ -150,6 +150,20 @@ load_modules() {
+   done
+ }
+ 
++# Warn early when the machine is not a real server (WSL) or has no systemd.
++check_environment() {
++  local title text
++  if is_wsl; then
++    title=$(t env.wsl.title); text=$(t env.wsl.text)
++  elif ! has_systemd; then
++    title=$(t env.nosystemd.title); text=$(t env.nosystemd.text)
++  else
++    return 0
++  fi
++  if (( ASSUME_YES )); then log_warn "$text"; return 0; fi
++  ui_yesno "$title" "$text" no || quit_cancel
++}
++
+ # ------------------------------------------------------------------ menus
+ show_help() {
+   local id text=""
+@@ -324,6 +338,7 @@ main() {
+   check_os
+   load_modules
+   detect_hw
++  check_environment
+   welcome
+   select_preset
+   select_features
+@@ -333,4 +348,5 @@ main() {
+   summary
+ }
+ 
+-main "$@"
++# Run only when executed directly, so tests can source this file and call single functions.
++if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi
+diff --git a/tests/dry-run.sh b/tests/dry-run.sh
+index 7fe844c..d45849f 100644
+--- a/tests/dry-run.sh
++++ b/tests/dry-run.sh
+@@ -21,6 +21,7 @@ bash ./setup.sh --yes --dry-run --preset recommended --lang en --ssh-key \
+   >/tmp/vps-dry.out 2>&1 || { echo "dry run FAILED"; tail -n 30 /tmp/vps-dry.out; fail=1; }
+ 
+ # Regresi: fitur preset tidak boleh gugur diam-diam (mis. nginx_jails saat nginx baru dipasang di run yang sama)
++# shellcheck disable=SC2015  # the || branch is the failure report, it never runs after a success
+ grep -q "Nginx fail2ban jails" /tmp/vps-dry.out && ! grep -q "^! Skipped:" /tmp/vps-dry.out \
+   || { echo "REGRESSION: a selected feature was dropped"; grep "Skipped" /tmp/vps-dry.out; fail=1; }
+ 
+diff --git a/tests/features.sh b/tests/features.sh
+new file mode 100644
+index 0000000..b9749a2
+--- /dev/null
++++ b/tests/features.sh
+@@ -0,0 +1,104 @@
++#!/usr/bin/env bash
++# shellcheck disable=SC2015,SC2329,SC2016  # "A && pass || bad" is an if/else; stubs are called by the sourced code; single quotes are intentional
++# Feature-level tests: preset parsing, prompts that depend on other features, port-80 mapping,
++# WSL detection and the fail2ban filter regex. No root, no changes to the system.
++set -uo pipefail
++cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
++export LOG_FILE=/tmp/vps-features.log
++fail=0
++pass() { echo "  ok   $*"; }
++bad()  { echo "  FAIL $*"; fail=1; }
++check() { local d=$1; shift; if "$@"; then pass "$d"; else bad "$d"; fi; }
++reject() { local d=$1; shift; if "$@"; then bad "$d"; else pass "$d"; fi; }
++
++# shellcheck source=../setup.sh
++source ./setup.sh
++DRY_RUN=1; ASSUME_YES=1
++OS_ID=ubuntu; OS_VERSION=24.04
++load_modules
++
++echo "== presets =="
++printf 'alpha\nbeta # comment\ngamma' > presets/_t.list          # no newline at the end
++trap 'rm -f presets/_t.list' EXIT
++load_preset _t
++check "last preset line without trailing newline is read" test -n "${PRESET_SET[gamma]:-}"
++check "comments and spaces are stripped"                  test -n "${PRESET_SET[beta]:-}"
++for f in presets/*.list; do
++  [[ $f == presets/_t.list ]] && continue
++  while IFS= read -r id || [[ -n $id ]]; do
++    id=${id%%#*}; id=${id//[[:space:]]/}
++    [[ -z $id ]] && continue
++    [[ " ${FEATURE_IDS[*]} " == *" $id "* ]] || bad "$f lists unknown feature '$id'"
++  done <"$f"
++done
++pass "every preset entry is a registered feature"
++
++echo "== prompts see features installed in the same run =="
++_has_nginx() { return 1; }; _has_postgres() { return 1; }; _has_mysql() { return 1; }
++SELECTED_SET=(); CFG=()
++reject "nginx_jails refused when no nginx and none selected" prompt_nginx_jails
++SELECTED_SET[webserver]=1; CFG[webserver]=apache
++reject "nginx_jails refused when apache is the chosen web server" prompt_nginx_jails
++CFG[webserver]=nginx
++check  "nginx_jails accepted when nginx is installed in this run" prompt_nginx_jails
++SELECTED_SET=()
++reject "db_backup refused when no database anywhere" prompt_db_backup
++SELECTED_SET[postgresql]=1
++check  "db_backup accepted when PostgreSQL is selected" prompt_db_backup
++
++echo "== port 80 owner mapping =="
++check "nginx -> nginx"        test "$(_port80_web nginx)" = nginx
++check "apache2 -> apache"     test "$(_port80_web apache2)" = apache
++check "httpd (RHEL) -> apache" test "$(_port80_web httpd)" = apache
++check "caddy -> caddy"        test "$(_port80_web caddy)" = caddy
++check "unknown process -> empty" test -z "$(_port80_web haproxy)"
++CFG=()
++reject "port conflict defaults to cancel with --yes" _resolve_port80_conflict "t" haproxy
++
++# "stop" path: choice is only recorded while asking; the service is stopped later in run_webserver
++(
++  ASSUME_YES=0
++  ui_menu() { echo stop; }
++  has_systemd() { return 0; }
++  systemctl() { return 0; }
++  CFG=()
++  _resolve_port80_conflict t haproxy || exit 1
++  [[ ${CFG[web_stop_unit]:-} == haproxy ]] || exit 2
++  DRY_RUN=1; CFG[webserver]=nginx
++  run_webserver_nginx() { :; }; ws_ufw_open() { :; }
++  out=$(run_webserver 2>&1)
++  [[ $out == *"systemctl disable --now haproxy"* ]]
++) && pass "choosing 'stop' records the unit and run_webserver stops it" || bad "port 80 stop flow"
++(
++  ASSUME_YES=0
++  ui_menu() { echo ignore; }
++  has_systemd() { return 1; }
++  CFG=()
++  _resolve_port80_conflict t haproxy && [[ -z ${CFG[web_stop_unit]:-} ]]
++) && pass "choosing 'ignore' continues without stopping anything" || bad "port 80 ignore flow"
++
++echo "== environment =="
++check "WSL_DISTRO_NAME means WSL" env WSL_DISTRO_NAME=Ubuntu bash -c 'source lib/os.sh; is_wsl'
++out=$(WSL_DISTRO_NAME=Ubuntu bash ./setup.sh --yes --dry-run --preset minimal --lang en 2>&1)
++check "WSL is warned about but --yes keeps going" bash -c '[[ $1 == *"Windows Subsystem for Linux"* && $1 == *"==> [1/"* ]]' _ "$out"
++
++echo "== fail2ban nginx-bad-request regex =="
++if command -v python3 >/dev/null 2>&1; then
++  for f in modules/ubuntu/70-ops.sh modules/almalinux/70-ops.sh; do
++    python3 - "$f" <<'PY' && pass "$f: counts 400/444 only" || bad "$f: regex wrong"
++import re, sys
++src = open(sys.argv[1]).read()
++rx = re.search(r'nginx-bad-request\.conf.*?^failregex = ([^\n]+)$', src, re.S | re.M).group(1)
++rx = re.compile(rx.replace('<HOST>', r'(?P<host>\S+)'))
++line = '203.0.113.9 - - [06/Oct/2026:10:00:00 +0700] "%s" %s 150 "-" "ua"'
++must = [line % ('GET / HTTP/1.1', 400), line % ('\\x16\\x03\\x01', 400), line % ('GET / HTTP/1.1', 444)]
++must_not = [line % ('GET /favicon.ico HTTP/1.1', 404), line % ('GET / HTTP/1.1', 200), line % ('GET / HTTP/1.1', 499)]
++sys.exit(0 if all(rx.search(l) for l in must) and not any(rx.search(l) for l in must_not) else 1)
++PY
++  done
++else
++  echo "  skip python3 not installed"
++fi
++
++(( fail )) && echo "FEATURE TESTS FAILED" || echo "feature tests passed"
++exit $fail
+diff --git a/tests/templates.sh b/tests/templates.sh
+index e3b8fa6..1908035 100644
+--- a/tests/templates.sh
++++ b/tests/templates.sh
+@@ -1,4 +1,5 @@
+ #!/usr/bin/env bash
++# shellcheck disable=SC2178,SC2128  # "out" holds command output here; the array warning is a false positive
+ # shellcheck disable=SC2015,SC2001  # pass() never fails, so "A && pass || bad" is a safe if/else
+ # Renders every template and validates it with the web server's own config test.
+ # Servers that are not installed are skipped. Run as root (nginx/caddy paths).
+-- 
+2.43.0
+

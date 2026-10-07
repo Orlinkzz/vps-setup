@@ -60,7 +60,7 @@ sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
 | Security | UFW firewall · Fail2ban · Automatic security updates |
 | Databases | **PostgreSQL** · **MySQL/MariaDB** · **Redis** (all with RAM-based tuning) · **Create a database / user** wizard |
 | Runtimes | **PHP-FPM** + Composer · **Node.js** · **Bun** · **Go** · **Python 3** · **Docker** + Compose · **FrankenPHP** |
-| Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request) |
+| Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request; 404s are not counted, so normal visitors and crawlers are not banned) |
 | Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard |
 | Platforms | **Ubuntu 22.04 / 24.04** · **Debian 11 / 12** · **AlmaLinux / Rocky 8 / 9** (apt and dnf) |
 
@@ -108,6 +108,10 @@ Good to know:
 - **Idempotent.** Safe to run again; finished work is detected and skipped. Files are only rewritten when content changes, and replaced files are backed up to `/var/backups/vps-setup/`.
 - **Logged.** Everything is written to `/var/log/vps-setup.log` (passwords are never logged).
 - **Review before changes.** A summary screen lists exactly what will run.
+- **Warns when it is not a real server.** Inside WSL, or without systemd, it asks before going on (`--yes` only prints the warning).
+- **Port 80 already taken?** The web server step asks what to do: stop and disable that service, continue anyway, or skip the step. Nothing is stopped before the final review; with `--yes` the step is skipped.
+- **Nothing gets dropped silently.** If a selected item cannot be installed (cancelled, or a requirement is missing) a screen lists it before anything runs. Items that depend on another item chosen in the same run (e.g. Nginx jails with Nginx) work together.
+- **Secrets stay in files.** The generated MySQL root login is written to `/root/.my.cnf` (mode 600) and is not printed or logged.
 
 > Your cloud provider may have its own firewall (security groups). Open the same ports there too.
 
@@ -171,6 +175,7 @@ Use `run`, `run_sh`, `write_file`, `pkg_install`, `svc_enable_now` — they resp
 
 ```bash
 bash tests/unit.sh        # validators, idempotent write_file
+bash tests/features.sh    # preset parsing, features that depend on others, port-80 flow, fail2ban regex
 bash tests/dry-run.sh     # syntax, i18n key coverage, dry runs (all servers x all site types)
 bash tests/templates.sh   # every template validated by nginx -t / apache2 -t / caddy validate,
                           # plus live HTTP checks on nginx (needs root; skips missing servers)
@@ -191,8 +196,12 @@ sudo ./lib/uninstall.sh --yes      # non-interactive
 ```
 
 Replaced files are restored from `/var/backups/vps-setup/` if needed. A few things are
-left alone deliberately (swap file, databases, users, packages) — the script prints the
-exact commands to remove them yourself.
+left alone deliberately (swap file, databases, users, packages, Bun in `/opt/bun`, the MySQL
+root login in `/root/.my.cnf`, and a service that was stopped to free port 80) — the script prints
+the exact commands for each.
+
+Colors: the dialogs use a fixed palette. Set `NEWT_COLORS` to use your own, or
+`VPS_SETUP_COLORS=default` for whiptail's built-in colors.
 
 ## Beginner guide
 

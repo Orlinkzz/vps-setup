@@ -100,22 +100,23 @@ run_mysql() {
   pkg_install mysql-server
 
   root_pass=$(_rand_pass)
-  CFG[mysql_root_pass]=""
+  CFG[mysql_root_saved]=""
 
-  # Set a root password. It is only reported/stored when the change really succeeded
-  # (on re-runs root may already have one). Password goes via stdin, not the process list.
+  # Give root a password and keep it ONLY in /root/.my.cnf (mode 600): it is never shown on
+  # screen, logged or kept in memory-state files. The password goes to mysql through stdin,
+  # not through the process list. An existing /root/.my.cnf is the admin's own: leave root alone.
   if (( ! DRY_RUN )); then
-    if printf "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '%s';\n" "$root_pass" \
-         | mysql 2>>"$LOG_FILE"; then
-      CFG[mysql_root_pass]=$root_pass
-      # Keep "sudo mysql" working now that root no longer uses auth_socket.
-      if [[ ! -e /root/.my.cnf ]]; then
-        write_file /root/.my.cnf 600 <<EOF
+    if [[ -e /root/.my.cnf ]]; then
+      log_info "$(t db.mysql.keep_cnf)"
+    elif printf "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '%s';\n" "$root_pass" \
+           | mysql 2>>"$LOG_FILE"; then
+      write_file /root/.my.cnf 600 <<EOF
+# Managed by vps-setup: MySQL root login (keeps "sudo mysql" working)
 [client]
 user=root
 password="$root_pass"
 EOF
-      fi
+      CFG[mysql_root_saved]=1
     else
       log_warn "$(t db.mysql.root_unchanged)"
     fi
@@ -151,7 +152,7 @@ summary_mysql() {
 
 notes_mysql() {
   t note.mysql; echo
-  if [[ -n ${CFG[mysql_root_pass]:-} ]]; then t note.mysql_root "${CFG[mysql_root_pass]}"; echo; fi
+  if [[ -n ${CFG[mysql_root_saved]:-} ]]; then t note.mysql_root; echo; fi
   return 0
 }
 

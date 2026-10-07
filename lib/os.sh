@@ -64,6 +64,9 @@ nginx_filter() {
 
 has_systemd() { [[ -d /run/systemd/system ]]; }
 
+# Windows Subsystem for Linux: not a real server (no public IP, firewall/SSH steps are meaningless).
+is_wsl() { [[ -n ${WSL_DISTRO_NAME:-} ]] || grep -qi microsoft /proc/version 2>/dev/null; }
+
 primary_ip() {
   local ip
   ip=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}') || true
@@ -132,6 +135,8 @@ pkg_name() {
 # Install by Debian-style name, translating on RHEL family.
 pkg_install_mapped() {
   local p out=()
+  # Word splitting is intentional: pkg_name may map one name to several packages (gcc gcc-c++ make).
+  # shellcheck disable=SC2207
   for p in "$@"; do out+=($(pkg_name "$p")); done
   pkg_install "${out[@]}"
 }

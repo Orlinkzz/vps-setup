@@ -29,6 +29,7 @@ run_php_runtime() {
   fi
 
   local sock
+  # shellcheck disable=SC2012  # plain socket names; ls | head just picks the first one
   sock=$(ls /run/php/php*-fpm.sock 2>/dev/null | head -n 1)
   CFG[php_socket]=${sock:-/run/php/php-fpm.sock}
   CFG[php_ver]=$ver
