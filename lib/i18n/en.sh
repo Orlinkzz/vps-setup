@@ -372,3 +372,15 @@ MSG[sum.monitor]="Health monitoring"
 MSG[sum.jails]="Nginx fail2ban jails"
 
 MSG[note.monitor]="See a summary at any time:  sudo vps-setup-health"
+
+# ------------------------------------------------------------- cloudflare
+MSG[feat.cloudflare.title]="Cloudflare: see real visitor IPs"
+MSG[feat.cloudflare.desc]="If your site is behind Cloudflare's proxy (the orange cloud), the server only sees Cloudflare's addresses. This makes Nginx or Apache trust the visitor IP that Cloudflare passes along, but only when the request really comes from a Cloudflare range, so nobody can fake it. Logs, fail2ban and your apps then see the real visitor. The range list is refreshed weekly."
+MSG[cf.need_web]="Cloudflare support needs Nginx or Apache (Caddy is not supported yet). Install one of them first, then run this option again."
+MSG[cf.ask_tunnel]="Do you use a Cloudflare Tunnel (cloudflared running on this server)?\n\nIf yes, requests arrive from this server itself, so 127.0.0.1 is trusted as well."
+MSG[cf.installing]="Setting up Cloudflare real-IP support..."
+MSG[cf.failed]="Could not apply the Cloudflare config. The web server was left as it was. Details: %s"
+MSG[cf.no_systemd]="No systemd here, so the weekly refresh of Cloudflare's ranges was not scheduled. Run vps-setup-cloudflare-ips now and then."
+MSG[cf.done]="Cloudflare real-IP support is active on %s; the ranges refresh weekly"
+MSG[sum.cloudflare]="Cloudflare real visitor IP (%s)"
+MSG[note.cloudflare]="Cloudflare: keep SSL/TLS mode on Full (strict). fail2ban now sees real visitor IPs, but a ban on this server cannot stop traffic that arrives through Cloudflare, so use Cloudflare firewall rules to block. Refresh the ranges now:  sudo vps-setup-cloudflare-ips --server %s"

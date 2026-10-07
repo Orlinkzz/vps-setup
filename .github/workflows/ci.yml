@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: shellcheck --version | sed -n 2p
-      - run: shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh tests/*.sh
+      - run: shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh templates/cloudflare/*.sh tests/*.sh
 
   tests:
     name: Unit, feature, dry-run and template tests
@@ -30,10 +30,19 @@ jobs:
       - run: bash tests/features.sh
       - run: bash tests/dry-run.sh   # syntax, i18n key coverage, every server x site type
       - run: sudo env NO_LIVE=1 bash tests/templates.sh   # needs root: nginx -t opens /var/log/nginx
+      - run: sudo bash tests/cloudflare.sh   # real-IP config vs the real nginx config tester
 
   integration:
-    name: Real nginx + apache run (twice)
-    runs-on: ubuntu-24.04            # a throw-away VM, so the destructive test is safe here
+    name: Real nginx + apache run (twice) (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}        # a throw-away VM, so the destructive test is safe here
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04, experimental: false }
+          # Ubuntu 22.04 ships nginx 1.18, which exercises the "old nginx" code path.
+          - { os: ubuntu-22.04, experimental: true }
     steps:
       - uses: actions/checkout@v4
       - name: Install the web servers without starting them
@@ -48,9 +57,36 @@ jobs:
       - name: Free port 80 (the test starts the servers itself)
         run: sudo systemctl stop nginx apache2 || true
       - run: sudo env DISPOSABLE=1 bash tests/integration.sh
+      - run: sudo bash tests/cloudflare.sh   # nginx and Apache config testers
       - name: Show logs when the run failed
         if: failure()
         run: |
           for f in /tmp/vps-int.out /tmp/vps-int2.out /var/log/vps-setup.log; do
             echo "::group::$f"; sudo tail -n 80 "$f" 2>/dev/null || echo "(missing)"; echo "::endgroup::"
           done
+
+  # The tool claims Ubuntu, Debian and AlmaLinux/Rocky. These jobs run the non-destructive tests
+  # inside each distro's own image (setup.sh picks modules/<family> from /etc/os-release).
+  # Experimental: failures are reported but do not block until the jobs have proven stable.
+  distros:
+    name: Tests on ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:22.04", "debian:11", "debian:12", "almalinux:9", "rockylinux:9"]
+    steps:
+      - name: Install prerequisites
+        run: |
+          if command -v apt-get >/dev/null 2>&1; then
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bash procps iproute2 curl whiptail ca-certificates git sudo
+          else
+            dnf install -y -q --allowerasing procps-ng iproute curl newt ca-certificates git sudo
+          fi
+      - uses: actions/checkout@v4
+      - run: bash tests/unit.sh
+      - run: bash tests/features.sh
+      - run: bash tests/dry-run.sh

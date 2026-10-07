@@ -92,6 +92,16 @@ rm -f /usr/local/bin/vps-setup-backup /usr/local/bin/vps-setup-health
 rm -f /etc/cron.d/vps-setup-backup /etc/cron.d/vps-setup-health
 echo "  removed: backup scripts + cron jobs"
 
+# Cloudflare real-IP support
+systemctl disable --now vps-setup-cloudflare.timer >/dev/null 2>&1 || true
+command -v a2disconf >/dev/null 2>&1 && a2disconf vps-setup-cloudflare >/dev/null 2>&1
+rm -f /etc/nginx/conf.d/01-vps-setup-cloudflare.conf /etc/apache2/conf-available/vps-setup-cloudflare.conf \
+      /etc/apache2/conf-enabled/vps-setup-cloudflare.conf /etc/httpd/conf.d/01-vps-setup-cloudflare.conf \
+      /usr/local/sbin/vps-setup-cloudflare-ips /etc/vps-setup/cloudflare.conf \
+      /etc/systemd/system/vps-setup-cloudflare.service /etc/systemd/system/vps-setup-cloudflare.timer
+systemctl daemon-reload >/dev/null 2>&1 || true
+echo "  removed: Cloudflare real-IP config + weekly timer (reload your web server to apply)"
+
 # FrankenPHP service
 rm -f /etc/systemd/system/frankenphp.service
 echo "  removed: frankenphp systemd service"

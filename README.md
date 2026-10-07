@@ -13,6 +13,13 @@ On a **fresh** Ubuntu 22.04 / 24.04, Debian 11 / 12 or AlmaLinux / Rocky 8 / 9 s
 curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash
 ```
 
+For a reproducible install, pin a release tag or (strictest) a full commit SHA. A commit SHA is
+content-addressed, so what you download is exactly what you reviewed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/v0.6.2/install.sh | sudo VPS_SETUP_REF=v0.6.2 bash
+```
+
 Prefer to read the code first? (Recommended.)
 
 ```bash
@@ -27,7 +34,7 @@ The interface is **English by default**; you can pick **Bahasa Indonesia** on th
 
 | Option | Meaning |
 |---|---|
-| `--preset NAME` | `recommended`, `minimal` or `custom` (skips the first menu) |
+| `--preset NAME` | `recommended`, `minimal`, `custom`, `domain`, `database` or `cloudflare` (skips the first menu) |
 | `--lang en\|id` | Interface language |
 | `--dry-run` | Show what would happen, change nothing (works without root) |
 | `-y`, `--yes` | Non-interactive, accept defaults (requires `--preset`) |
@@ -61,7 +68,7 @@ sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
 | Databases | **PostgreSQL** · **MySQL/MariaDB** · **Redis** (all with RAM-based tuning) · **Create a database / user** wizard |
 | Runtimes | **PHP-FPM** + Composer · **Node.js** · **Bun** · **Go** · **Python 3** · **Docker** + Compose · **FrankenPHP** |
 | Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request; 404s are not counted, so normal visitors and crawlers are not banned) |
-| Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard |
+| Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard · **Cloudflare** real visitor IP (Nginx/Apache) |
 | Platforms | **Ubuntu 22.04 / 24.04** · **Debian 11 / 12** · **AlmaLinux / Rocky 8 / 9** (apt and dnf) |
 
 Presets: **recommended** (everything except hostname and the domain wizard), **minimal** (basics), **custom** (start from defaults), **domain** (only the domain wizard), **database** (only the create-database wizard).
@@ -99,6 +106,21 @@ Good to know:
 - **Dotfiles** (`.env`, `.git`, `.htaccess` ...) are never served; HSTS is left off until you decide to enable it.
 - **IPv6-less servers** are detected and the `listen [::]` lines are left out automatically.
 - Ubuntu's stock `nginx.conf` directives that would duplicate ours are commented out (a backup is kept in `/var/backups/vps-setup/`).
+
+## Behind Cloudflare
+
+If your sites use Cloudflare's proxy (orange cloud), the web server only sees Cloudflare's addresses, so
+logs, fail2ban and your apps would all see the same few IPs. The **Cloudflare** feature
+(`sudo ./setup.sh --preset cloudflare`, or tick it in the Web group) makes Nginx or Apache trust the
+`CF-Connecting-IP` header **only for requests that come from Cloudflare's own ranges**, so nobody else can fake
+it. The ranges come from `cloudflare.com/ips-v4` and `/ips-v6`; a list that fails validation is never used
+(a built-in copy takes over), and a weekly systemd timer keeps them fresh. A config that the web server's own
+tester rejects is rolled back automatically.
+
+- Using a **Cloudflare Tunnel** (`cloudflared` on the same server)? Answer yes to the question and `127.0.0.1` is trusted too.
+- fail2ban then sees real visitor IPs, but a firewall ban on your server cannot stop traffic that arrives *through*
+  Cloudflare. Use Cloudflare's firewall rules to block.
+- Refresh by hand: `sudo vps-setup-cloudflare-ips --server nginx` (or `apache`). Caddy is not supported yet.
 
 ## Safety by design
 
@@ -149,7 +171,7 @@ lib/i18n/{en,id}.sh    all user-visible text
 lib/uninstall.sh       rollback: removes everything vps-setup created
 modules/*/*.sh         one file per group of features, per distro family
 presets/*.list         feature ids per preset
-templates/             web server configs (nginx, apache, caddy) and placeholder pages
+templates/             web server configs (nginx, apache, caddy), placeholder pages, the Cloudflare IP script
 tests/                 unit, smoke, template and integration tests
 docs/                  beginner guide (EN + ID)
 .github/workflows/     CI pipeline
@@ -179,6 +201,7 @@ bash tests/features.sh    # preset parsing, features that depend on others, port
 bash tests/dry-run.sh     # syntax, i18n key coverage, dry runs (all servers x all site types)
 bash tests/templates.sh   # every template validated by nginx -t / apache2 -t / caddy validate,
                           # plus live HTTP checks on nginx (needs root; skips missing servers)
+bash tests/cloudflare.sh  # Cloudflare real-IP script vs the real nginx / Apache config testers (needs root)
 DISPOSABLE=1 bash tests/integration.sh   # real (non-dry-run) nginx + apache flow, run twice.
                                          # DESTRUCTIVE: only inside a throw-away container/VM
 shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh tests/*.sh
@@ -222,4 +245,4 @@ running the tool, and what to do next.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Replace `OWNER` in `install.sh` / this README with your GitHub username, and `<YOUR NAME>` in `LICENSE`.
+MIT — see [LICENSE](LICENSE).

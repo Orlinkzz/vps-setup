@@ -28,6 +28,28 @@ export PATH="$STUB:$PATH"
 printf 'webserver\nadd_domain\n' > presets/_test.list
 trap 'rm -f presets/_test.list; rm -rf "$STUB"; nginx -s stop 2>/dev/null; apachectl stop 2>/dev/null' EXIT
 
+# The real visitor IP must reach the access log when a request comes from a trusted proxy, and a
+# spoofed header from anybody else must be ignored. Here 127.0.0.1 plays "Cloudflare" for the test.
+check_realip() {  # <nginx|apache> <domain>
+  local ws=$1 d=$2 logdir=/var/log/nginx cf=templates/cloudflare/vps-setup-cloudflare-ips.sh
+  [[ $ws == apache ]] && logdir=/var/log/apache2
+  echo "== real visitor IP behind Cloudflare: $ws =="
+  printf 'CF_EXTRA_TRUSTED="127.0.0.1"\n' >/tmp/cf-int.conf
+  if CF_SETTINGS=/tmp/cf-int.conf bash "$cf" --server "$ws" --bundled --quiet; then pass "cloudflare config applied, server reloaded"
+  else bad "cloudflare script failed"; return; fi
+  sleep 1
+  curl -s -o /dev/null -H "Host: $d" -H "CF-Connecting-IP: 203.0.113.7" http://127.0.0.1/
+  sleep 1
+  grep -rqs '^203\.0\.113\.7 ' "$logdir" && pass "trusted proxy: the log shows the visitor IP" || bad "visitor IP missing from the log"
+  # without the extra trust, 127.0.0.1 is just somebody on the internet: its header must be ignored
+  bash "$cf" --server "$ws" --bundled --quiet || { bad "cloudflare script failed (2nd)"; return; }
+  sleep 1
+  curl -s -o /dev/null -H "Host: $d" -H "CF-Connecting-IP: 198.51.100.9" http://127.0.0.1/
+  sleep 1
+  if grep -rqs '^198\.51\.100\.9 ' "$logdir"; then bad "spoofed CF-Connecting-IP was trusted"; else pass "untrusted source cannot spoof the visitor IP"; fi
+  bash "$cf" --server "$ws" --remove --quiet
+}
+
 check_server() {  # <name> <domain> <type>
   local ws=$1 d=$2 type=$3 code
   echo "== real run: $ws / $type =="
@@ -48,6 +70,7 @@ check_server() {  # <name> <domain> <type>
   c unknown.example.test / >/dev/null; grep -q "Server is running" /tmp/body && pass "unknown host gets the friendly page" || bad "catch-all page missing"
   # idempotency: a second run must succeed and change nothing important
   if bash setup.sh --yes --preset _test --lang en --webserver "$ws" --domain "$d" --site-type "$type" "${extra[@]}" >/tmp/vps-int2.out 2>&1; then pass "second run is safe (idempotent)"; else bad "second run failed"; tail -n 15 /tmp/vps-int2.out | sed 's/^/       /'; fi
+  [[ $type == static ]] && check_realip "$ws" "$d"
 }
 
 check_server nginx  n1.example.test static

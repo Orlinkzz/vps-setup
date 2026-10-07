@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2015  # in the checks below the || branch is the failure report; it never runs after a success
 # Smoke tests: syntax, message-key coverage, and a full non-interactive dry run.
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
@@ -27,7 +28,11 @@ grep -q "Nginx fail2ban jails" /tmp/vps-dry.out && ! grep -q "^! Skipped:" /tmp/
 
 # Regresi: nilai CFG yang diisi di run_<fitur> (subshell) harus sampai ke catatan akhir
 echo "== CFG survives the feature subshell =="
-cat > modules/ubuntu/99-ztest.sh <<'EOT'
+# The fake module has to go into the module set that setup.sh loads on THIS distro.
+fam=$(. /etc/os-release && case "$ID" in rocky|rhel|centos) echo almalinux ;; *) echo "$ID" ;; esac)
+[[ -d modules/$fam ]] || fam=ubuntu
+ztest=modules/$fam/99-ztest.sh
+cat > "$ztest" <<'EOT'
 register_feature ztest test on
 run_ztest() { CFG[ztest]=from-subshell; }
 notes_ztest() { echo "ZTEST_VALUE=${CFG[ztest]:-MISSING}"; }
@@ -36,13 +41,14 @@ echo ztest > presets/_z.list
 bash ./setup.sh --yes --dry-run --preset _z --lang en >/tmp/vps-dry-z.out 2>&1
 grep -q "ZTEST_VALUE=from-subshell" /tmp/vps-dry-z.out \
   || { echo "REGRESSION: CFG lost after run_<feature>"; fail=1; }
-rm -f modules/ubuntu/99-ztest.sh presets/_z.list
+rm -f "$ztest" presets/_z.list
 
 echo "== dry run: minimal (id) =="
 bash ./setup.sh --yes --dry-run --preset minimal --lang id >/tmp/vps-dry2.out 2>&1 || true
 
 printf 'webserver\nadd_domain\n' > presets/_wd.list
-trap 'rm -f presets/_wd.list' EXIT
+printf 'webserver\ncloudflare\n' > presets/_cf.list
+trap 'rm -f presets/_wd.list presets/_cf.list' EXIT
 echo "== dry run: every web server x site type =="
 for ws in nginx apache caddy; do
   for ty in static spa proxy laravel php wordpress redirect; do
@@ -51,5 +57,15 @@ for ws in nginx apache caddy; do
       >/tmp/vps-dry3.out 2>&1 || { echo "dry run FAILED: $ws/$ty"; tail -n 15 /tmp/vps-dry3.out; fail=1; }
   done
 done
+
+echo "== dry run: Cloudflare real IP (nginx, apache; caddy must be refused, not dropped silently) =="
+for ws in nginx apache; do
+  bash ./setup.sh --yes --dry-run --preset _cf --lang en --webserver "$ws" >/tmp/vps-dry4.out 2>&1 \
+    && grep -q "vps-setup-cloudflare-ips --server $ws" /tmp/vps-dry4.out \
+    || { echo "dry run FAILED: cloudflare/$ws"; tail -n 15 /tmp/vps-dry4.out; fail=1; }
+done
+bash ./setup.sh --yes --dry-run --preset _cf --lang en --webserver caddy --email me@example.com >/tmp/vps-dry4.out 2>&1
+grep -q "Cloudflare support needs Nginx or Apache" /tmp/vps-dry4.out && grep -q "Skipped: Cloudflare" /tmp/vps-dry4.out \
+  || { echo "REGRESSION: cloudflare + caddy should be refused with an explanation"; tail -n 10 /tmp/vps-dry4.out; fail=1; }
 
 exit $fail

@@ -1,0 +1,2 @@
+# Only the Cloudflare real visitor IP setup (needs Nginx or Apache)
+cloudflare

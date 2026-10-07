@@ -363,3 +363,15 @@ MSG[sum.monitor]="Pemantauan kesehatan"
 MSG[sum.jails]="Jail fail2ban Nginx"
 
 MSG[note.monitor]="Lihat ringkasan kapan saja:  sudo vps-setup-health"
+
+# ------------------------------------------------------------- cloudflare
+MSG[feat.cloudflare.title]="Cloudflare: lihat IP pengunjung asli"
+MSG[feat.cloudflare.desc]="Jika situs Anda di belakang proxy Cloudflare (awan oranye), server hanya melihat alamat Cloudflare. Fitur ini membuat Nginx atau Apache memercayai IP pengunjung yang diteruskan Cloudflare, tetapi hanya jika permintaan benar-benar datang dari rentang IP Cloudflare, sehingga tidak bisa dipalsukan. Log, fail2ban, dan aplikasi Anda lalu melihat pengunjung yang sebenarnya. Daftar rentang IP diperbarui tiap minggu."
+MSG[cf.need_web]="Dukungan Cloudflare membutuhkan Nginx atau Apache (Caddy belum didukung). Pasang salah satunya dulu, lalu jalankan opsi ini lagi."
+MSG[cf.ask_tunnel]="Apakah Anda memakai Cloudflare Tunnel (cloudflared berjalan di server ini)?\n\nJika ya, permintaan datang dari server ini sendiri, sehingga 127.0.0.1 ikut dipercaya."
+MSG[cf.installing]="Menyiapkan dukungan IP asli Cloudflare..."
+MSG[cf.failed]="Konfigurasi Cloudflare tidak bisa diterapkan. Web server dibiarkan seperti semula. Detail: %s"
+MSG[cf.no_systemd]="Tidak ada systemd di sini, jadi pembaruan mingguan rentang IP Cloudflare tidak dijadwalkan. Jalankan vps-setup-cloudflare-ips sesekali."
+MSG[cf.done]="Dukungan IP asli Cloudflare aktif di %s; rentang IP diperbarui tiap minggu"
+MSG[sum.cloudflare]="IP pengunjung asli Cloudflare (%s)"
+MSG[note.cloudflare]="Cloudflare: biarkan mode SSL/TLS di Full (strict). fail2ban kini melihat IP pengunjung asli, tetapi banned di server ini tidak bisa menghentikan lalu lintas yang lewat Cloudflare, jadi gunakan firewall rules Cloudflare untuk memblokir. Perbarui rentang IP sekarang:  sudo vps-setup-cloudflare-ips --server %s"

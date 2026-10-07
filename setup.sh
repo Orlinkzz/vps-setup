@@ -32,7 +32,7 @@ VPS Setup $VERSION — set up a fresh Linux server step by step.
 Usage: sudo ./setup.sh [options]
 
 Options:
-  --preset NAME     recommended | minimal | custom | domain | database (skips the first menu)
+  --preset NAME     recommended | minimal | custom | domain | database | cloudflare (skips the first menu)
   --lang en|id      Interface language (default: en; asks if not given)
   --dry-run         Show what would happen without changing anything
   -y, --yes         Non-interactive: accept defaults (requires --preset)
