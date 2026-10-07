@@ -12,7 +12,7 @@ run_system_update() {
   log_info "$(t system_update.upgrade)"
   pkg_upgrade
   log_info "$(t system_update.base)"
-  pkg_install curl wget git unzip zip htop nano ca-certificates openssl jq \
+  pkg_install curl wget git unzip zip htop nano ca-certificates openssl jq diffutils \
     policycoreutils policycoreutils-python-utils dnf-plugins-core
   log_ok "$(t system_update.done)"
 }

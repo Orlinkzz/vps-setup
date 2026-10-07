@@ -84,12 +84,20 @@ backup_file() {
   cp -a "$f" "$BACKUP_DIR/$(printf '%s' "$f" | tr / _).$(date +%Y%m%d%H%M%S)"
 }
 
+# _same_file <a> <b>: true when both files have identical content. Uses cmp, but minimal RHEL-family
+# images (AlmaLinux / Rocky containers) ship without diffutils; the trailing "x" keeps the final
+# newline, which $(...) would otherwise strip.
+_same_file() {
+  if command -v cmp >/dev/null 2>&1; then cmp -s "$1" "$2"; return; fi
+  [[ $(cat "$1"; printf x) == "$(cat "$2"; printf x)" ]]
+}
+
 # write_file <path> [mode]  — content on stdin. Idempotent: skips if unchanged.
 write_file() {
   local path=$1 mode=${2:-644} tmp
   tmp=$(mktemp)
   cat >"$tmp"
-  if [[ -f $path ]] && cmp -s "$tmp" "$path"; then
+  if [[ -f $path ]] && _same_file "$tmp" "$path"; then
     rm -f "$tmp"
     _log_file INFO "unchanged: $path"
     return 0

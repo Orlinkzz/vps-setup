@@ -7,6 +7,8 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 [[ $EUID == 0 ]] || { echo "skipped (needs root)"; exit 0; }
 S=$PWD/templates/cloudflare/vps-setup-cloudflare-ips.sh
+# Run it through bash: a checkout that lost the executable bit (zip, Windows) must not break the test.
+cf() { bash "$S" "$@"; }
 CONF=""
 fail=0; pass() { echo "  ok   $*"; }; bad() { echo "  FAIL $*"; fail=1; }
 T=$(mktemp -d); trap 'rm -rf "$T"; [[ -n $CONF ]] && rm -f "$CONF"' EXIT
@@ -22,28 +24,28 @@ printf '%s\n' 2400:cb00::/32 >"$T/bad/ips-v6"
 if command -v nginx >/dev/null 2>&1; then
   CONF=/etc/nginx/conf.d/01-vps-setup-cloudflare.conf; rm -f "$CONF"
   echo "== nginx =="
-  CF_IPS_BASE=file://$T/good "$S" --server nginx --no-reload --quiet \
+  CF_IPS_BASE=file://$T/good cf --server nginx --no-reload --quiet \
     && [[ $(grep -c '^set_real_ip_from' "$CONF") == 7 ]] && grep -q '^real_ip_header CF-Connecting-IP;' "$CONF" \
     && pass "live list rendered (5 IPv4 + 2 IPv6) and accepted by nginx -t" || bad "live list"
 
   m1=$(stat -c %Y "$CONF"); sleep 1
-  CF_IPS_BASE=file://$T/good "$S" --server nginx --no-reload --quiet
+  CF_IPS_BASE=file://$T/good cf --server nginx --no-reload --quiet
   [[ $(stat -c %Y "$CONF") == "$m1" ]] && pass "second run changes nothing" || bad "file rewritten although nothing changed"
 
-  CF_IPS_BASE=file://$T/bad "$S" --server nginx --no-reload --quiet
+  CF_IPS_BASE=file://$T/bad cf --server nginx --no-reload --quiet
   if grep -q '173.245.48.0/20' "$CONF" && ! grep -q 'evil' "$CONF" && [[ $(grep -c '^set_real_ip_from' "$CONF") == 22 ]]; then
     pass "a list with a bad line is rejected, built-in ranges used"
   else bad "bad list was not rejected"; fi
 
-  CF_IPS_BASE=file:///nonexistent "$S" --server nginx --no-reload --quiet
+  CF_IPS_BASE=file:///nonexistent cf --server nginx --no-reload --quiet
   [[ $(grep -c '^set_real_ip_from' "$CONF") == 22 ]] && pass "unreachable Cloudflare -> built-in ranges" || bad "no fallback"
 
   printf 'CF_EXTRA_TRUSTED="127.0.0.1 ::1"\n' >"$T/extra.conf"
-  CF_SETTINGS=$T/extra.conf "$S" --server nginx --no-reload --quiet --bundled
+  CF_SETTINGS=$T/extra.conf cf --server nginx --no-reload --quiet --bundled
   grep -q '^set_real_ip_from 127.0.0.1;' "$CONF" && pass "extra trusted proxy (Cloudflare Tunnel) added" || bad "extra trusted missing"
 
   printf 'CF_EXTRA_TRUSTED="1.2.3.4; evil"\n' >"$T/evil.conf"
-  if CF_SETTINGS=$T/evil.conf "$S" --server nginx --no-reload --quiet --bundled 2>/dev/null; then bad "injection in CF_EXTRA_TRUSTED accepted"
+  if CF_SETTINGS=$T/evil.conf cf --server nginx --no-reload --quiet --bundled 2>/dev/null; then bad "injection in CF_EXTRA_TRUSTED accepted"
   else pass "injection in CF_EXTRA_TRUSTED refused"; fi
 
   # nginx rejects the config -> the previous file must be put back untouched
@@ -51,11 +53,11 @@ if command -v nginx >/dev/null 2>&1; then
   mkdir "$T/stub"; real=$(command -v nginx)
   printf '#!/bin/sh\n[ "$1" = "-t" ] && { echo "nginx: [emerg] simulated failure" >&2; exit 1; }\nexec %s "$@"\n' "$real" >"$T/stub/nginx"
   chmod +x "$T/stub/nginx"
-  if PATH=$T/stub:$PATH CF_IPS_BASE=file://$T/good "$S" --server nginx --no-reload --quiet 2>/dev/null; then bad "failure not reported"
+  if PATH=$T/stub:$PATH CF_IPS_BASE=file://$T/good cf --server nginx --no-reload --quiet 2>/dev/null; then bad "failure not reported"
   elif [[ $(md5sum <"$CONF") == "$before" ]]; then pass "failed config test -> previous config restored"
   else bad "config not restored after failure"; fi
 
-  "$S" --server nginx --remove --no-reload --quiet
+  cf --server nginx --remove --no-reload --quiet
   [[ ! -e $CONF ]] && nginx -t >/dev/null 2>&1 && pass "--remove deletes the config and nginx still tests fine" || bad "--remove"
 fi
 
@@ -64,10 +66,10 @@ if command -v apache2ctl >/dev/null 2>&1 || command -v httpd >/dev/null 2>&1; th
   if [[ -d /etc/apache2 ]]; then CONF=/etc/apache2/conf-available/vps-setup-cloudflare.conf; else CONF=/etc/httpd/conf.d/01-vps-setup-cloudflare.conf; fi
   rm -f "$CONF"
   echo "== apache =="
-  CF_IPS_BASE=file://$T/good "$S" --server apache --no-reload --quiet \
+  CF_IPS_BASE=file://$T/good cf --server apache --no-reload --quiet \
     && grep -q '^  RemoteIPHeader CF-Connecting-IP' "$CONF" && [[ $(grep -c 'RemoteIPTrustedProxy' "$CONF") == 7 ]] \
     && pass "apache config rendered and accepted by the config test" || bad "apache config"
-  "$S" --server apache --remove --no-reload --quiet
+  cf --server apache --remove --no-reload --quiet
   [[ ! -e $CONF ]] && pass "apache --remove" || bad "apache --remove"
 fi
 
