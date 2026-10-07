@@ -34,7 +34,7 @@ mkstub sudo      'shift 2; exec "$@"'
 mkstub psql      'echo "psql $*" >>"$STUB_LOG"
 case "$*" in
   *"FROM pg_database d JOIN"*) printf "app1 owner1\napp2 owner2\n" ;;
-  *"SELECT 1 FROM pg_database"*) case "$*" in *"= '"'"'app1'"'"';"*) echo 1 ;; esac ;;
+  *"SELECT 1 FROM pg_database"*) case "$*" in *app1*) echo 1 ;; esac ;;
   *"DROP DATABASE"*) [ -e "$STUB_FAIL_DIR/drop" ] && exit 1 ;;
 esac
 exit 0'
@@ -42,7 +42,7 @@ mkstub pg_dump   '[ -e "$STUB_FAIL_DIR/dump" ] && exit 1; echo "-- dump of $1"'
 mkstub mysql     'echo "mysql $*" >>"$STUB_LOG"
 case "$*" in
   *"SHOW DATABASES"*) printf "information_schema\nmysql\nperformance_schema\nshop\nsys\n" ;;
-  *"information_schema.SCHEMATA"*) case "$*" in *"= '"'"'shop'"'"';"*) echo shop ;; esac ;;
+  *"information_schema.SCHEMATA"*) case "$*" in *shop*) echo shop ;; esac ;;
 esac
 exit 0'
 mkstub mysqldump '[ -e "$STUB_FAIL_DIR/dump" ] && exit 1; echo "-- mysqldump of $4"'
