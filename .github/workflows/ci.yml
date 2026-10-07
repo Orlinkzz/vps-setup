@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx-light openssl
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx openssl
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
       - run: bash tests/dry-run.sh   # syntax, i18n key coverage, every server x site type
@@ -52,7 +52,7 @@ jobs:
           printf '#!/bin/sh\nexit 101\n' | sudo tee /usr/sbin/policy-rc.d >/dev/null
           sudo chmod +x /usr/sbin/policy-rc.d
           sudo apt-get update -qq
-          sudo apt-get install -y -qq nginx-light apache2 curl python3 openssl
+          sudo apt-get install -y -qq nginx apache2 curl python3 openssl
           sudo rm -f /usr/sbin/policy-rc.d
       - name: Free port 80 (the test starts the servers itself)
         run: sudo systemctl stop nginx apache2 || true
@@ -81,6 +81,13 @@ jobs:
       - name: Install prerequisites
         run: |
           if command -v apt-get >/dev/null 2>&1; then
+            # Debian 11 (bullseye) LTS has ended: its packages moved to archive.debian.org,
+            # so a plain "apt-get update" fails with exit code 100.
+            if [ -r /etc/os-release ] && . /etc/os-release && [ "${ID:-}" = debian ] && [ "${VERSION_ID:-}" = 11 ]; then
+              printf 'deb http://archive.debian.org/debian bullseye main\n' > /etc/apt/sources.list
+              rm -f /etc/apt/sources.list.d/*.list
+              echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99archive
+            fi
             apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bash procps iproute2 curl whiptail ca-certificates git sudo
           else
