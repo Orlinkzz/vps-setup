@@ -282,7 +282,7 @@ prompt_create_database() {
 }
 
 run_create_database() {
-  local i n=${CFG[wizard_count]:-0} eng d user pass
+  local i n=${CFG[wizard_count]:-0} eng d user pass esc
 
   for ((i = 1; i <= n; i++)); do
     eng=${CFG[wizard_${i}_engine]}; d=${CFG[wizard_${i}_db]}
@@ -293,14 +293,20 @@ run_create_database() {
     case $eng in
       postgresql)
         run sudo -u postgres createdb "$d"
-        run sudo -u postgres psql -c "CREATE USER \"$user\" WITH PASSWORD '$pass';"
+        # The password goes through stdin (never into the log or the process list). A quote in it
+        # is doubled so it cannot break out of the SQL string. ON_ERROR_STOP keeps the exit status
+        # non-zero on failure, which "psql < file" would otherwise swallow.
+        esc=${pass//\'/\'\'}
+        run_stdin "$pass" "CREATE USER \"$user\" WITH PASSWORD '$esc';" sudo -u postgres psql -X -q -v ON_ERROR_STOP=1
         run sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE \"$d\" TO \"$user\";"
         # Grant on public schema for modern PostgreSQL
         run sudo -u postgres psql -d "$d" -c "GRANT ALL ON SCHEMA public TO \"$user\";" 2>/dev/null || true
         ;;
       mysql)
         run mysql -e "CREATE DATABASE IF NOT EXISTS \`${d}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-        run mysql -e "CREATE USER IF NOT EXISTS '${user}'@'localhost' IDENTIFIED BY '${pass}';"
+        # Same idea for MySQL/MariaDB: backslash and quote are escaped inside the string literal.
+        esc=${pass//\\/\\\\}; esc=${esc//\'/\'\'}
+        run_stdin "$pass" "CREATE USER IF NOT EXISTS '${user}'@'localhost' IDENTIFIED BY '${esc}';" mysql
         run mysql -e "GRANT ALL PRIVILEGES ON \`${d}\`.* TO '${user}'@'localhost'; FLUSH PRIVILEGES;"
         ;;
     esac

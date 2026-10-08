@@ -76,6 +76,28 @@ run() {
 
 run_sh() { run bash -c "$1"; }
 
+# run_stdin <secret> <stdin text> <cmd...>
+# Like run, but the text reaches the command through stdin, not through its arguments. Use it for
+# anything that carries a password (SQL with PASSWORD '...'): arguments show up in the process
+# list and in the log, stdin does not. Only the command itself is logged, as "(input hidden)".
+# <secret> is masked in the command's own output before that is logged, because some clients echo
+# part of a failing statement; pass "" when there is nothing to mask.
+run_stdin() {
+  local secret=$1 input=$2; shift 2
+  if (( DRY_RUN )); then log_dry "$* (input hidden)"; return 0; fi
+  _log_file CMD "$* (input hidden)"
+  local out rc=0
+  out=$(printf '%s\n' "$input" | "$@" 2>&1) || rc=$?
+  if [[ -n $secret ]]; then out=${out//"$secret"/********}; fi
+  if [[ -n $out ]]; then printf '%s\n' "$out" >>"$LOG_FILE" 2>/dev/null || true; fi
+  if (( rc != 0 )); then
+    log_err "$(t err.cmd_failed "$* (input hidden)")"
+    tail -n 12 "$LOG_FILE" | sed 's/^/    /' >&2 || true
+    return "$rc"
+  fi
+  return 0
+}
+
 backup_file() {
   local f=$1
   [[ -e $f ]] || return 0

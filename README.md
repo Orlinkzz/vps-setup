@@ -220,6 +220,7 @@ Use `run`, `run_sh`, `write_file`, `pkg_install`, `svc_enable_now` — they resp
 ```bash
 bash tests/unit.sh        # validators, idempotent write_file
 bash tests/features.sh    # preset parsing, features that depend on others, port-80 flow, fail2ban regex
+bash tests/secrets.sh     # passwords never reach the log, the screen or a command line (stubs, no root)
 bash tests/dry-run.sh     # syntax, i18n key coverage, dry runs (all servers x all site types)
 bash tests/manage.sh      # list/remove sites, list/drop databases (stubs + temp dirs, no root, touches nothing real)
 bash tests/templates.sh   # every template validated by nginx -t / apache2 -t / caddy validate,

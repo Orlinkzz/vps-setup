@@ -28,6 +28,7 @@ jobs:
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx openssl
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
+      - run: bash tests/secrets.sh   # passwords never reach the log, the screen or a command line
       - run: bash tests/dry-run.sh   # syntax, i18n key coverage, every server x site type
       - run: sudo env NO_LIVE=1 bash tests/templates.sh   # needs root: nginx -t opens /var/log/nginx
       - run: sudo bash tests/cloudflare.sh   # real-IP config vs the real nginx config tester
@@ -90,4 +91,5 @@ jobs:
       - uses: actions/checkout@v4
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
+      - run: bash tests/secrets.sh   # passwords never reach the log, the screen or a command line
       - run: bash tests/dry-run.sh

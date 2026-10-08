@@ -74,7 +74,7 @@ This project changes configuration on other people's servers, so we are strict a
 - **Back up before replacing.** Any file that gets replaced must be backed up to `/var/backups/vps-setup/`.
 - **Support `--dry-run`.** Every new step must be able to show what it would do without changing the system.
 - **Reversible.** Anything you add must also be removed by `lib/uninstall.sh`, with original files restored from backup when needed.
-- **Logged.** Important steps are written to `/var/log/vps-setup.log`. **Passwords and secrets must never be logged**, shown on screen, or passed as command arguments visible through `ps`.
+- **Logged.** Important steps are written to `/var/log/vps-setup.log`. **Passwords and secrets must never be logged**, shown on screen, or passed as command arguments visible through `ps`. Send them through stdin with `run_stdin` (`lib/common.sh`) instead of `run`; `tests/secrets.sh` fails if one reaches a command line or the log. The one thing shown on screen is a password the tool generated for you (for example for a new database user), printed once at the end because that is the only way to hand it over.
 - **Beginner-friendly.** Menus and questions use plain language. Provide sensible defaults and briefly explain what a choice does.
 - **Only supported releases.** We support OS releases that still get security updates from their vendor. When one reaches end of life, move it to the end-of-life line in `os_check` (`lib/os.sh`), which makes the tool warn, and remove it from the README and the CI matrix in the next release. A new release goes into the CI matrix first; add it to `os_check` once its jobs are green.
 - **Two languages.** User-facing text must be available in both English and Bahasa Indonesia (`--lang id`).
