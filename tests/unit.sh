@@ -46,6 +46,7 @@ rm -rf "$tmp"
 
 # _same_file must work without cmp (minimal AlmaLinux / Rocky images): only cat is on PATH here
 tmp=$(mktemp -d); mkdir "$tmp/bin"; ln -s "$(command -v cat)" "$tmp/bin/cat"
+# shellcheck disable=SC2317,SC2329  # called indirectly through the ok/bad helpers below
 same_nocmp() { env PATH="$tmp/bin" "$BASH" -c "source lib/common.sh; _same_file \"\$1\" \"\$2\"" _ "$@"; }
 printf 'a\n' >"$tmp/1"; printf 'a\n' >"$tmp/2"; printf 'a' >"$tmp/3"; printf 'b\n' >"$tmp/4"
 ok  same_nocmp "$tmp/1" "$tmp/2"

@@ -83,7 +83,10 @@ list_sites() {
       found=$((found + 1))
       line=$(head -n 1 "$f")
       type=-
-      if [[ $line == *"$MANAGED_MARK"* ]]; then type=$(sed 's/^.*vps-setup[^[:alnum:]]*//' <<<"$line"); fi
+      if [[ $line == *"$MANAGED_MARK"* ]]; then
+        type=${line##*vps-setup}              # text after the last "vps-setup"
+        type=${type#"${type%%[[:alnum:]]*}"}  # drop the leading punctuation/spaces (": ", " - ")
+      fi
       if [[ $server == caddy ]]; then
         https=auto
       elif [[ -d $_R/etc/letsencrypt/live/$d ]]; then
