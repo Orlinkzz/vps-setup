@@ -174,7 +174,7 @@ footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center
         <code id="main-cmd"><span class="p">$</span> curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash</code>
         <button class="copy" data-target="main-cmd" data-text="curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash">Salin</button>
       </div>
-      <p class="small">Lebih suka cek dulu isinya? Pakai <a href="#perintah">git clone</a> atau mode <code>--dry-run</code>.</p>
+      <p class="small">Lebih suka cek dulu isinya? Pakai <a href="#perintah">git clone</a> atau mode <code>--dry-run</code>.<br>Mendukung Ubuntu 22.04 / 24.04, Debian 12, dan AlmaLinux / Rocky 8 / 9.</p>
     </div>
 
     <div class="term" aria-label="Contoh tampilan menu vps-setup">
@@ -244,7 +244,7 @@ footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center
     <div class="safe">
       <div><h3>File dibackup</h3><p>File yang diganti disimpan ke <code>/var/backups/vps-setup/</code>. File hanya ditulis ulang kalau isinya memang berubah.</p></div>
       <div><h3>Semua tercatat</h3><p>Setiap langkah masuk ke <code>/var/log/vps-setup.log</code>. Password tidak pernah ikut dicatat.</p></div>
-      <div><h3>Bisa rollback</h3><p>Skrip uninstall menghapus semua file dan konfigurasi yang dibuat vps-setup, dan mengembalikan file dari backup bila perlu.</p></div>
+      <div><h3>Bisa rollback</h3><p>Skrip uninstall menghapus file dan konfigurasi yang dibuat vps-setup, dan mengembalikan file dari backup bila perlu. Data penting seperti database dan login root MySQL sengaja dibiarkan; skrip menunjukkan cara menghapusnya.</p></div>
     </div>
     <h3 style="font:700 1.15rem var(--display);margin:48px 0 4px">Sekalian urusan operasional</h3>
     <p class="sub" style="margin-bottom:12px">Selain setup awal, ada bekal untuk menjaga server tetap sehat.</p>

@@ -190,7 +190,7 @@ lib/common.sh          logging, run/dry-run, write_file, validators, feature reg
 lib/os.sh              OS detection, package manager / service abstraction (apt + dnf)
 lib/ui.sh              whiptail wrappers (all return defaults with --yes)
 lib/i18n/{en,id}.sh    all user-visible text
-lib/uninstall.sh       rollback: removes everything vps-setup created
+lib/uninstall.sh       rollback: removes the files and config vps-setup created (data and packages stay)
 modules/*/*.sh         one file per group of features, per distro family
 presets/*.list         feature ids per preset
 templates/             web server configs (nginx, apache, caddy), placeholder pages, the Cloudflare IP script
