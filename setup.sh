@@ -155,6 +155,12 @@ check_os() {
   case $rc in
     2) die "$(t err.os_unsupported "$OS_PRETTY")" ;;
     1) ui_msg "$OS_PRETTY" "$(t warn.os_untested "$OS_PRETTY")" ;;
+    3) # End of life: warn, and ask before going on (--yes only prints the warning).
+       if (( ASSUME_YES )); then
+         log_warn "$(t warn.os_eol "$OS_PRETTY")"
+       else
+         ui_yesno "$OS_PRETTY" "$(t warn.os_eol "$OS_PRETTY")\n\n$(t warn.os_eol_ask)" no || quit_cancel
+       fi ;;
   esac
 }
 
@@ -364,6 +370,7 @@ manage_main() {
   case $rc in
     2) die "$(t err.os_unsupported "$OS_PRETTY")" ;;
     1) log_warn "$(t warn.os_untested "$OS_PRETTY")" ;;
+    3) log_warn "$(t warn.os_eol "$OS_PRETTY")" ;;
   esac
   load_modules
   detect_hw

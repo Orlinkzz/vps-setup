@@ -3,11 +3,11 @@
 Interactive, beginner-friendly setup for a fresh Linux server.
 Pick what you want from a menu, answer a few simple questions, review, and go.
 
-> **Status:** Phase 6 of 6 — Ubuntu 22.04 / 24.04, Debian 11 / 12, AlmaLinux / Rocky 8 / 9. All phases complete: system, security, web, databases, runtimes, ops, uninstall, CI.
+> **Status:** Phase 6 of 6 — Ubuntu 22.04 / 24.04, Debian 12, AlmaLinux / Rocky 8 / 9. All phases complete: system, security, web, databases, runtimes, ops, uninstall, CI.
 
 ## Quick start
 
-On a **fresh** Ubuntu 22.04 / 24.04, Debian 11 / 12 or AlmaLinux / Rocky 8 / 9 server, as root or with sudo:
+On a **fresh** Ubuntu 22.04 / 24.04, Debian 12 or AlmaLinux / Rocky 8 / 9 server, as root or with sudo:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash
@@ -90,7 +90,7 @@ The removal commands are built so that a wrong command is recoverable:
 | Runtimes | **PHP-FPM** + Composer · **Node.js** · **Bun** · **Go** · **Python 3** · **Docker** + Compose · **FrankenPHP** |
 | Ops | **DB backups** with rotation · **Health monitoring** (`vps-setup-health`) · **Nginx fail2ban jails** (http-auth, botsearch, bad-request; 404s are not counted, so normal visitors and crawlers are not banned) |
 | Web | Web server (**Nginx**, **Caddy** or **Apache**) · Free HTTPS with Certbot · **Add a website / domain** wizard · **Cloudflare** real visitor IP (Nginx/Apache) |
-| Platforms | **Ubuntu 22.04 / 24.04** · **Debian 11 / 12** · **AlmaLinux / Rocky 8 / 9** (apt and dnf) |
+| Platforms | **Ubuntu 22.04 / 24.04** · **Debian 12** · **AlmaLinux / Rocky 8 / 9** (apt and dnf). Only releases that still get security updates are supported; end-of-life releases such as Debian 11 are warned about, not tested |
 
 Presets: **recommended** (everything except hostname and the domain wizard), **minimal** (basics), **custom** (start from defaults), **domain** (only the domain wizard), **database** (only the create-database wizard).
 Every preset opens a checklist, so you can always tick/untick items.
@@ -151,6 +151,7 @@ tester rejects is rolled back automatically.
 - **Idempotent.** Safe to run again; finished work is detected and skipped. Files are only rewritten when content changes, and replaced files are backed up to `/var/backups/vps-setup/`.
 - **Logged.** Everything is written to `/var/log/vps-setup.log` (passwords are never logged).
 - **Review before changes.** A summary screen lists exactly what will run.
+- **Warns on unmaintained systems.** On an end-of-life release (for example Debian 11 or Ubuntu 20.04) it explains that the server cannot be kept secure and asks before going on (`--yes` only prints the warning).
 - **Warns when it is not a real server.** Inside WSL, or without systemd, it asks before going on (`--yes` only prints the warning).
 - **Port 80 already taken?** The web server step asks what to do: stop and disable that service, continue anyway, or skip the step. Nothing is stopped before the final review; with `--yes` the step is skipped.
 - **Nothing gets dropped silently.** If a selected item cannot be installed (cancelled, or a requirement is missing) a screen lists it before anything runs. Items that depend on another item chosen in the same run (e.g. Nginx jails with Nginx) work together.

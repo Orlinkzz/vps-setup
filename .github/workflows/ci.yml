@@ -68,6 +68,7 @@ jobs:
   # The tool claims Ubuntu, Debian and AlmaLinux/Rocky. These jobs run the non-destructive tests
   # inside each distro's own image (setup.sh picks modules/<family> from /etc/os-release).
   # Experimental: failures are reported but do not block until the jobs have proven stable.
+  # debian:13 is not in os_check yet (it is reported as "untested"): once its jobs are green, add it there.
   distros:
     name: Tests on ${{ matrix.image }}
     runs-on: ubuntu-24.04
@@ -76,18 +77,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: ["ubuntu:22.04", "debian:11", "debian:12", "almalinux:9", "rockylinux:9"]
+        image: ["ubuntu:22.04", "debian:12", "debian:13", "almalinux:9", "rockylinux:9"]
     steps:
       - name: Install prerequisites
         run: |
           if command -v apt-get >/dev/null 2>&1; then
-            # Debian 11 (bullseye) LTS has ended: its packages moved to archive.debian.org,
-            # so a plain "apt-get update" fails with exit code 100.
-            if [ -r /etc/os-release ] && . /etc/os-release && [ "${ID:-}" = debian ] && [ "${VERSION_ID:-}" = 11 ]; then
-              printf 'deb http://archive.debian.org/debian bullseye main\n' > /etc/apt/sources.list
-              rm -f /etc/apt/sources.list.d/*.list
-              echo 'Acquire::Check-Valid-Until "false";' > /etc/apt/apt.conf.d/99archive
-            fi
             apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bash procps iproute2 curl whiptail ca-certificates git sudo
           else

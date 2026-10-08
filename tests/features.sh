@@ -77,6 +77,37 @@ reject "port conflict defaults to cancel with --yes" _resolve_port80_conflict "t
   _resolve_port80_conflict t haproxy && [[ -z ${CFG[web_stop_unit]:-} ]]
 ) && pass "choosing 'ignore' continues without stopping anything" || bad "port 80 ignore flow"
 
+echo "== supported platforms =="
+os_rc() { local rc=0; OS_ID=$1 OS_VERSION=$2 os_check || rc=$?; echo "$rc"; }
+for pair in "ubuntu 22.04" "ubuntu 24.04" "debian 12" "almalinux 9" "almalinux 8" "rocky 9" "rocky 8"; do
+  # shellcheck disable=SC2086
+  check "supported: $pair" test "$(os_rc $pair)" = 0
+done
+for pair in "ubuntu 20.04" "ubuntu 18.04" "debian 11" "debian 10"; do
+  # shellcheck disable=SC2086
+  check "end of life (3): $pair" test "$(os_rc $pair)" = 3
+done
+for pair in "debian 13" "ubuntu 26.04" "almalinux 10"; do
+  # shellcheck disable=SC2086
+  check "untested (1): $pair" test "$(os_rc $pair)" = 1
+done
+check "unsupported distro (2): arch" test "$(os_rc arch rolling)" = 2
+
+# check_os on an end-of-life release: --yes only warns, interactive asks first
+eol_check() { # <ASSUME_YES> <exit code of the yes/no dialog>
+  ( ASSUME_YES=$1; ans=$2
+    detect_os() { OS_ID=debian; OS_VERSION=11; OS_PRETTY="Debian 11"; return 0; }
+    ui_yesno() { return "$ans"; }
+    check_os )
+}
+out=$(eol_check 1 1 2>&1); rc=$?
+check "EOL with --yes: continues" test "$rc" -eq 0
+check "EOL with --yes: prints the warning" grep -q "end of life" <<<"$out"
+out=$(eol_check 0 0 2>&1); rc=$?
+check "EOL interactive, user says yes: continues" test "$rc" -eq 0
+out=$(eol_check 0 1 2>&1); rc=$?
+check "EOL interactive, user says no: stops" test "$rc" -eq 130
+
 echo "== environment =="
 check "WSL_DISTRO_NAME means WSL" env WSL_DISTRO_NAME=Ubuntu bash -c 'source lib/os.sh; is_wsl'
 out=$(WSL_DISTRO_NAME=Ubuntu bash ./setup.sh --yes --dry-run --preset minimal --lang en 2>&1)

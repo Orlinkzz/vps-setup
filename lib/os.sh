@@ -21,18 +21,24 @@ detect_os() {
   esac
 }
 
-# 0 = supported, 1 = untested version, 2 = unsupported distro
+# 0 = supported, 1 = untested version, 2 = unsupported distro,
+# 3 = end-of-life release (its vendor no longer ships regular security updates).
+# Policy: only releases that still get security updates are supported. When one reaches end
+# of life, move it from the "supported" line to the "end-of-life" line, then drop it from the
+# README and the CI matrix in the next release. EOL releases still work after a warning.
 os_check() {
   case "$OS_ID" in
     ubuntu)
       case "$OS_VERSION" in
-        22.04|24.04) return 0 ;;
-        *) return 1 ;;
+        22.04|24.04)       return 0 ;;
+        16.04|18.04|20.04) return 3 ;;
+        *)                 return 1 ;;
       esac ;;
     debian)
       case "$OS_VERSION" in
-        11|12) return 0 ;;
-        *) return 1 ;;
+        12)       return 0 ;;
+        9|10|11)  return 3 ;;
+        *)        return 1 ;;
       esac ;;
     almalinux|rocky)
       case "$OS_VERSION" in
