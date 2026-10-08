@@ -16,7 +16,7 @@ jobs:
     name: ShellCheck
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: shellcheck --version | sed -n 2p
       - run: shellcheck -x -s bash setup.sh install.sh lib/*.sh lib/i18n/*.sh modules/*/*.sh templates/cloudflare/*.sh tests/*.sh
 
@@ -24,7 +24,7 @@ jobs:
     name: Unit, feature, dry-run and template tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx openssl
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
@@ -45,7 +45,7 @@ jobs:
           # Ubuntu 22.04 ships nginx 1.18, which exercises the "old nginx" code path.
           - { os: ubuntu-22.04, experimental: true }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the web servers without starting them
         # On a runner with systemd the packages start themselves on port 80; the second one then
         # fails to bind, its postinst fails and apt exits non-zero. policy-rc.d (101) forbids that.
@@ -88,7 +88,7 @@ jobs:
           else
             dnf install -y -q --allowerasing procps-ng iproute curl newt ca-certificates git sudo
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
       - run: bash tests/secrets.sh   # passwords never reach the log, the screen or a command line
