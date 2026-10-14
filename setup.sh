@@ -50,6 +50,10 @@ Options:
   --site-type TYPE  With --yes: static|spa|proxy|laravel|php|wordpress|redirect
   --port N          With --yes: app port for --site-type proxy (default 3000)
   --redirect-to URL With --yes: target for --site-type redirect
+  --app-cmd "CMD"   With --site-type proxy: run the app as a service (app-DOMAIN) with this
+                    start command, inside /var/www/DOMAIN; \$PORT holds the port
+  --hsts            With HTTPS: also send HSTS (browsers then refuse HTTP for a year)
+  --no-workers      With --site-type laravel: skip the scheduler and queue worker services
   --add-database    Jump straight to the "create a database / user" wizard
   --engine NAME     With --yes --preset database: postgresql | mysql (default: postgresql)
   --db NAME         With --yes --preset database: database name to create
@@ -76,6 +80,7 @@ Examples:
   sudo vps-setup --yes --preset recommended --ssh-key "ssh-ed25519 AAAA..."
   sudo vps-setup --add-domain              # add another website later
   sudo vps-setup --yes --preset domain --domain app.example.com --site-type proxy --port 3000
+  sudo vps-setup --yes --preset domain --domain app.example.com --site-type proxy --port 3000 --app-cmd "npm start"
   sudo vps-setup --add-database            # create a database later
   sudo vps-setup --yes --preset database --engine postgresql --db myapp
   sudo vps-setup --list-sites
@@ -105,6 +110,9 @@ while (( $# )); do
     --site-type) [[ $# -ge 2 ]] || die "--site-type needs a value"; CFG[arg_type]=$2; shift ;;
     --port)    [[ $# -ge 2 ]] || die "--port needs a value"; CFG[arg_port]=$2; shift ;;
     --redirect-to) [[ $# -ge 2 ]] || die "--redirect-to needs a value"; CFG[arg_target]=$2; shift ;;
+    --app-cmd) [[ $# -ge 2 ]] || die "--app-cmd needs a value"; CFG[arg_app_cmd]=$2; shift ;;
+    --hsts)    CFG[arg_hsts]=1 ;;
+    --no-workers) CFG[arg_no_workers]=1 ;;
     --engine)  [[ $# -ge 2 ]] || die "--engine needs a value"
                [[ $2 =~ ^(postgresql|mysql)$ ]] || die "--engine must be postgresql or mysql"
                CFG[arg_engine]=$2; shift ;;

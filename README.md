@@ -57,7 +57,7 @@ The interface is **English by default**; you can pick **Bahasa Indonesia** on th
 | `--db NAME` | With `--yes --preset database`: database name to create |
 | `--db-user NAME` | With `--yes --preset database`: database user (defaults to `--db` value) |
 | `--list-sites` | List the websites vps-setup created (domain, server, type, HTTPS, status), then exit |
-| `--remove-domain DOMAIN` | Remove a website: its web server config, its Let's Encrypt certificate and (with `--purge-files`) its files |
+| `--remove-domain DOMAIN` | Remove a website: its web server config, its app services, its Let's Encrypt certificate and (with `--purge-files`) its files |
 | `--purge-files`, `--keep-cert` | With `--remove-domain`: move `/var/www/DOMAIN` out of the way / keep the certificate |
 | `--list-databases` | List the PostgreSQL / MySQL databases, then exit |
 | `--drop-database NAME` | Drop a database (a compressed dump is saved first); add `--db-user` to drop that user too, `--engine` if both engines are installed |
@@ -67,6 +67,9 @@ The interface is **English by default**; you can pick **Bahasa Indonesia** on th
 | `--webserver NAME` | With `--yes`: `nginx` (default), `caddy` or `apache` |
 | `--email ADDRESS` | Email for Let's Encrypt (handy with `--yes`) |
 | `--domain`, `--site-type`, `--port`, `--redirect-to` | With `--yes --preset domain`: describe the site to add |
+| `--app-cmd "CMD"` | With `--site-type proxy`: keep the app running as the service `app-DOMAIN` (see [App services](#app-services)) |
+| `--hsts` | With HTTPS: also send HSTS for the site (off by default) |
+| `--no-workers` | With `--site-type laravel`: skip the scheduler and queue worker |
 
 `--remove-domain` and `--drop-database` ask before they act; **with `--yes` they do not ask**.
 
@@ -138,15 +141,38 @@ templates/caddy/    Caddyfile.tpl (+ catch-all), sites/<type>.caddy.tpl
 templates/html/     placeholder pages
 ```
 
-Placeholders: `{{DOMAIN}}` `{{SERVER_NAMES}}` `{{SERVER_NAMES_COMMA}}` `{{SERVER_ALIAS_LINE}}` `{{ROOT}}` `{{UPSTREAM}}` `{{PHP_SOCKET_PATH}}` `{{REDIRECT_TARGET}}` `{{MAX_BODY}}` `{{MAX_BODY_BYTES}}`.
+Placeholders: `{{DOMAIN}}` `{{SERVER_NAMES}}` `{{SERVER_NAMES_COMMA}}` `{{SERVER_ALIAS_LINE}}` `{{HSTS_LINE}}` `{{ROOT}}` `{{UPSTREAM}}` `{{PHP_SOCKET_PATH}}` `{{REDIRECT_TARGET}}` `{{MAX_BODY}}` `{{MAX_BODY_BYTES}}`.
 
 Good to know:
 - **Unknown hostnames / direct IP access** show a friendly "Server is running" page (or, if you choose, the connection is closed). Nginx also refuses TLS handshakes for unknown names (nginx ≥ 1.19.4).
 - **HTTPS:** Nginx/Apache use Certbot (`--redirect`, auto-renew timer); Caddy does it by itself. The wizard checks DNS first and warns instead of burning Let's Encrypt rate limits. Set `VPS_SETUP_LE_STAGING=1` to use test certificates.
 - **PHP sites** can be created before PHP-FPM exists (they return 502 until Phase 4 installs it).
-- **Dotfiles** (`.env`, `.git`, `.htaccess` ...) are never served; HSTS is left off until you decide to enable it.
+- **Dotfiles** (`.env`, `.git`, `.htaccess` ...) are never served.
+- **HSTS** is off unless you say yes for a site (or pass `--hsts`): browsers then refuse plain HTTP for that
+  domain for a year, so turn it on only when HTTPS works and will stay. Nginx/Apache get it from Certbot,
+  Caddy in the site file. No `includeSubDomains`, no `preload`.
 - **IPv6-less servers** are detected and the `listen [::]` lines are left out automatically.
 - Ubuntu's stock `nginx.conf` directives that would duplicate ours are commented out (a backup is kept in `/var/backups/vps-setup/`).
+
+### App services
+
+For a `proxy` site the wizard offers to **keep the app running**: it writes `app-DOMAIN.service`, which
+starts the app at boot and restarts it when it crashes.
+
+- Choose Node (`npm start`), Python (`.venv/bin/gunicorn --bind 127.0.0.1:$PORT app:app`), Go (`./app`) or
+  type any command. It runs in `/var/www/DOMAIN` as your admin user, through a login shell.
+- `PORT` and `HOST=127.0.0.1` are set; put secrets as `KEY=value` lines in `/etc/vps-setup/apps/DOMAIN.env`.
+- Until the folder has files the service simply waits, so you can create the site before the first deploy.
+- After a deploy: `sudo systemctl restart app-DOMAIN`. Logs: `journalctl -u app-DOMAIN -f`.
+- The app cannot gain privileges (`NoNewPrivileges`, so no `sudo`) and cannot write to `/usr` or `/etc`.
+- Using Docker, pm2 or something else? Answer No; the site is a plain reverse proxy as before.
+
+For a **`laravel`** site the wizard also sets up the **scheduler** (`laravel-DOMAIN-schedule.timer`, every
+minute) and a **queue worker** (`laravel-DOMAIN-queue.service`). Both run as the PHP-FPM user with the PHP
+version of the site and start working once `artisan` exists. After a deploy:
+`sudo systemctl restart laravel-DOMAIN-queue`.
+
+`--remove-domain` stops and removes these services with the site.
 
 ## Behind Cloudflare
 
@@ -281,6 +307,8 @@ running the tool, and what to do next.
 | 5 ✅ | Ops: DB backups with rotation, monitoring, Nginx fail2ban jails |
 | 6 ✅ | Uninstall/rollback, CI, docs, more distros (Debian, AlmaLinux/Rocky) |
 | 7 ✅ | 0.7.0: AlmaLinux/Rocky fixes (SELinux, PHP streams, Caddy, PostgreSQL auth), safe uninstall, `vps-setup` command, `--doctor`, `--update`, Manage menu, stricter CI |
+| 8 ✅ | 0.7.0: app services (systemd) for proxy sites, Laravel scheduler + queue worker, opt-in HSTS, English landing page |
+| next | Off-site backups (rclone / S3-compatible storage) |
 
 ## Changes and security
 

@@ -70,6 +70,24 @@ for ws in nginx apache caddy; do
   done
 done
 
+echo "== dry run: app service (proxy --app-cmd), Laravel workers, --no-workers =="
+bash ./setup.sh --yes --dry-run --preset _wd --lang en --webserver nginx --domain app.example.com \
+  --site-type proxy --port 3000 --app-cmd 'npm start' --hsts >/tmp/vps-dry5.out 2>&1 \
+  && grep -q "write /etc/systemd/system/app-app.example.com.service" /tmp/vps-dry5.out \
+  && grep -q "systemctl enable app-app.example.com.service" /tmp/vps-dry5.out \
+  || { echo "dry run FAILED: proxy --app-cmd"; tail -n 15 /tmp/vps-dry5.out; fail=1; }
+bash ./setup.sh --yes --dry-run --preset _wd --lang en --webserver nginx --domain lv.example.com \
+  --site-type laravel >/tmp/vps-dry5.out 2>&1 \
+  && grep -q "enable --now laravel-lv.example.com-queue.service laravel-lv.example.com-schedule.timer" /tmp/vps-dry5.out \
+  || { echo "dry run FAILED: laravel workers"; tail -n 15 /tmp/vps-dry5.out; fail=1; }
+bash ./setup.sh --yes --dry-run --preset _wd --lang en --webserver nginx --domain lv.example.com \
+  --site-type laravel --no-workers >/tmp/vps-dry5.out 2>&1 && ! grep -q "laravel-lv" /tmp/vps-dry5.out \
+  || { echo "dry run FAILED: laravel --no-workers"; tail -n 15 /tmp/vps-dry5.out; fail=1; }
+bash ./setup.sh --yes --dry-run --preset _wd --lang en --webserver nginx --domain bad.example.com \
+  --site-type proxy --app-cmd "echo 'x'" >/tmp/vps-dry5.out 2>&1
+grep -q "single quotes" /tmp/vps-dry5.out && ! grep -q "app-bad.example.com" /tmp/vps-dry5.out \
+  || { echo "REGRESSION: an --app-cmd with single quotes must be refused"; tail -n 10 /tmp/vps-dry5.out; fail=1; }
+
 echo "== dry run: Cloudflare real IP (nginx, apache; caddy must be refused, not dropped silently) =="
 for ws in nginx apache; do
   bash ./setup.sh --yes --dry-run --preset _cf --lang en --webserver "$ws" >/tmp/vps-dry4.out 2>&1 \

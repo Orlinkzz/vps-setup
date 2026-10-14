@@ -147,6 +147,37 @@ check "the failed dump leaves no .sql.gz behind" bash -c '! ls "$1"/dir/bad_* >/
 check "the log names the failure" grep -q "FAIL mysql: bad" "$B/log"
 rm -rf "$B"
 
+echo "== app service, Laravel workers, HSTS =="
+U=$(mktemp -d)
+# Capture what would be written instead of writing it (DRY_RUN=1 keeps run/systemctl as no-ops)
+write_file() { cat >"$U/${1##*/}"; }
+CFG[username]=""
+write_app_service api.example.com 4000 node 'node server.js --port $PORT --pct 100%' >/dev/null 2>&1
+f=$U/app-api.example.com.service
+check "app unit is written"                         test -s "$f"
+check "app unit carries the managed marker"          grep -q "^# Managed by vps-setup" "$f"
+check "PORT and NODE_ENV are set"                    grep -qx "Environment=PORT=4000 HOST=127.0.0.1 NODE_ENV=production" "$f"
+check "\$ and % are escaped for systemd"             grep -qxF "ExecStart=/bin/bash -lc 'exec node server.js --port \$\$PORT --pct 100%%'" "$f"
+check "the app waits for its first deploy"           grep -qx "ConditionDirectoryNotEmpty=/var/www/api.example.com" "$f"
+check "the app never gains privileges (no sudo)"     grep -qx "NoNewPrivileges=true" "$f"
+check "valid_app_cmd accepts a normal command"       valid_app_cmd 'npm run start -- --port $PORT'
+reject "valid_app_cmd refuses single quotes"         valid_app_cmd "echo 'x'"
+reject "valid_app_cmd refuses an empty command"      valid_app_cmd '   '
+write_laravel_workers lv.example.com /run/php/php8.3-fpm.sock >/dev/null 2>&1
+check "queue worker uses the site's PHP version"     grep -qx "ExecStart=/usr/bin/php8.3 artisan queue:work --sleep=3 --tries=3 --max-time=3600" "$U/laravel-lv.example.com-queue.service"
+check "workers wait for artisan"                     grep -qx "ConditionPathExists=/var/www/lv.example.com/artisan" "$U/laravel-lv.example.com-schedule.service"
+check "scheduler runs every minute"                  grep -qx "OnCalendar=\*-\*-\* \*:\*:00" "$U/laravel-lv.example.com-schedule.timer"
+check "workers run as the PHP-FPM user"              grep -qx "User=$(php_fpm_user)" "$U/laravel-lv.example.com-queue.service"
+unset -f write_file
+out=$(render_tpl templates/caddy/sites/static.caddy.tpl DOMAIN=h.example.com SERVER_NAMES_COMMA=h.example.com \
+  ROOT=/var/www/h/public HSTS_LINE='    header Strict-Transport-Security "max-age=31536000"')
+check "Caddy site gets the HSTS header when asked"   grep -q 'Strict-Transport-Security "max-age=31536000"' <<<"$out"
+out=$(render_tpl templates/caddy/sites/static.caddy.tpl DOMAIN=h.example.com SERVER_NAMES_COMMA=h.example.com ROOT=/var/www/h/public HSTS_LINE=)
+reject "...and not by default"                       grep -q 'Strict-Transport-Security' <<<"$out"
+s=$(declare -f site_ssl)
+check "certbot gets --hsts for Nginx/Apache"         grep -q -- '--hsts' <<<"$s"
+rm -rf "$U"
+
 echo "== global command, --doctor, --update, --uninstall =="
 L=$(mktemp -d); ln -s "$PWD/setup.sh" "$L/vps-setup"
 check "works through a symlink (vps-setup in /usr/local/bin)" bash -c '"$1" --version | grep -q "^vps-setup "' _ "$L/vps-setup"

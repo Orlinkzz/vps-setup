@@ -10,6 +10,9 @@
 <meta name="robots" content="index,follow,max-image-preview:large">
 <meta name="theme-color" content="#0f1b2d">
 <link rel="canonical" href="https://orlinkzz.github.io/vps-setup/">
+<link rel="alternate" hreflang="id" href="https://orlinkzz.github.io/vps-setup/">
+<link rel="alternate" hreflang="en" href="https://orlinkzz.github.io/vps-setup/en/">
+<link rel="alternate" hreflang="x-default" href="https://orlinkzz.github.io/vps-setup/">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="vps-setup">
@@ -71,6 +74,8 @@ header.top{display:flex;justify-content:space-between;align-items:center;padding
 nav a{margin-left:22px;color:var(--muted);text-decoration:none;font-weight:500;font-size:.95rem}
 nav a:hover{color:var(--ink)}
 .gh{background:var(--ink);color:#fff!important;padding:8px 16px;border-radius:999px}
+.lang{border:1px solid var(--line);padding:6px 12px;border-radius:999px;font:600 .82rem var(--body)!important;letter-spacing:.04em}
+.lang:hover{border-color:var(--muted)}
 
 .hero>*{min-width:0}
 .hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:48px;align-items:center;padding:48px 0 72px}
@@ -164,6 +169,7 @@ footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center
       <a href="#cara">Cara pakai</a>
       <a href="#perintah">Perintah</a>
       <a href="#aman">Keamanan</a>
+      <a class="lang" href="en/" hreflang="en" lang="en" title="English version">EN</a>
       <a class="gh" href="https://github.com/Orlinkzz/vps-setup">GitHub</a>
     </nav>
   </header>
@@ -231,6 +237,11 @@ footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center
         <div class="cmd"><code id="c5"><span class="p">$</span> sudo vps-setup --add-database</code><button class="copy" data-target="c5" data-text="sudo vps-setup --add-database">Salin</button></div>
       </div>
       <div class="card">
+        <h3>Jalankan aplikasi Node, Python, atau Go</h3>
+        <p>Situs tipe proxy bisa sekalian dibuatkan service <code>app-DOMAIN</code>: menyala saat boot, restart sendiri kalau crash.</p>
+        <div class="cmd"><code id="c9"><span class="p">$</span> sudo vps-setup --add-domain</code><button class="copy" data-target="c9" data-text="sudo vps-setup --add-domain">Salin</button></div>
+      </div>
+      <div class="card">
         <h3>Mode otomatis untuk skrip</h3>
         <p>Lewati pertanyaan dengan preset, misalnya database PostgreSQL.</p>
         <div class="cmd"><code id="c6"><span class="p">$</span> sudo vps-setup --yes --preset database --engine postgresql --db myapp</code><button class="copy" data-target="c6" data-text="sudo vps-setup --yes --preset database --engine postgresql --db myapp">Salin</button></div>
@@ -240,7 +251,7 @@ footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center
         <p>Pemeriksaan hanya-baca: SSH, firewall, layanan, sertifikat, dan backup.</p>
         <div class="cmd"><code id="c7"><span class="p">$</span> sudo vps-setup --doctor</code><button class="copy" data-target="c7" data-text="sudo vps-setup --doctor">Salin</button></div>
       </div>
-      <div class="card">
+      <div class="card wide">
         <h3>Perbarui atau batalkan</h3>
         <p>Ambil versi terbaru, atau kembalikan konfigurasi yang dibuat vps-setup.</p>
         <div class="cmd"><code id="c8"><span class="p">$</span> sudo vps-setup --update
@@ -265,6 +276,9 @@ footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center
       <span>Backup database dengan rotasi</span>
       <span>Health monitoring (vps-setup-health)</span>
       <span>Cek kesehatan: vps-setup --doctor</span>
+      <span>Service aplikasi (systemd) untuk Node, Python, Go</span>
+      <span>Scheduler + queue worker Laravel</span>
+      <span>HSTS opsional per situs</span>
       <span>IP asli pengunjung di belakang Cloudflare</span>
       <span>Jail fail2ban untuk Nginx: http-auth, botsearch, bad-request</span>
     </div>
@@ -284,7 +298,7 @@ footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center
 </section>
 
 <footer>
-  <div class="wrap">vps-setup oleh <a href="https://github.com/Orlinkzz">Orlinkzz</a>. Panduan pemula: <a href="https://github.com/Orlinkzz/vps-setup/blob/main/docs/memulai.md">Bahasa Indonesia</a> · <a href="https://github.com/Orlinkzz/vps-setup/blob/main/docs/getting-started.md">English</a> · <a href="https://github.com/Orlinkzz/vps-setup#readme">dokumentasi lengkap</a>.</div>
+  <div class="wrap">vps-setup oleh <a href="https://github.com/Orlinkzz">Orlinkzz</a>. Panduan pemula: <a href="https://github.com/Orlinkzz/vps-setup/blob/main/docs/memulai.md">Bahasa Indonesia</a> · <a href="https://github.com/Orlinkzz/vps-setup/blob/main/docs/getting-started.md">English</a> · <a href="https://github.com/Orlinkzz/vps-setup#readme">dokumentasi lengkap</a>. <a href="en/" hreflang="en">English version</a>.</div>
 </footer>
 
 <script>

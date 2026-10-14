@@ -133,6 +133,14 @@ old session to fix it (see *Troubleshooting* below) — that is why you kept it 
 | Update the tool | `sudo vps-setup --update` |
 | Undo what it configured | `sudo vps-setup --uninstall` (packages and data stay) |
 
+- **Running a Node, Python or Go app?** Add the site as type *App behind a proxy* and answer Yes to
+  "keep your app running". Put your code in `/var/www/DOMAIN`, then `sudo systemctl restart app-DOMAIN`.
+  Logs: `journalctl -u app-DOMAIN -f`.
+- **Laravel?** The *Laravel* site type also sets up the scheduler and a queue worker. After each deploy:
+  `sudo systemctl restart laravel-DOMAIN-queue`.
+- **HSTS** (asked after HTTPS) makes browsers refuse plain HTTP for a year. Say No if you are unsure;
+  you lose nothing by leaving it off.
+
 - **Run the tool again whenever you like:** finished steps are skipped automatically.
 - **See the full log:** everything is written to `/var/log/vps-setup.log`.
 

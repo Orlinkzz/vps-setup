@@ -102,6 +102,32 @@ list_sites() {
   return 0
 }
 
+# ------------------------------------------------------------------ site services
+# systemd units the domain wizard may have created for a site: app service, Laravel queue + scheduler.
+site_unit_files() {
+  local u
+  for u in "app-$1.service" "laravel-$1-queue.service" "laravel-$1-schedule.timer" "laravel-$1-schedule.service"; do
+    printf '%s\n' "$_R/etc/systemd/system/$u"
+  done
+}
+
+# Stops, disables and removes them (a copy goes to BACKUP_DIR); units without our marker are left alone.
+remove_site_units() {
+  local d=$1 f u
+  local -a removed=()
+  while IFS= read -r f; do
+    if [[ ! -f $f ]] || ! grep -qF "$MANAGED_MARK" "$f"; then continue; fi
+    u=${f##*/}
+    run systemctl disable --now "$u" || true
+    backup_file "$f"
+    run rm -f "$f"
+    removed+=("$u")
+  done < <(site_unit_files "$d")
+  (( ${#removed[@]} )) || return 0
+  run systemctl daemon-reload || true
+  log_ok "$(t manage.units_removed "$d" "${removed[*]}")"
+}
+
 # ------------------------------------------------------------------ remove a site
 # remove_domain <domain>   (CFG[arg_purge]=1 moves /var/www/<domain> away, CFG[arg_keep_cert]=1 keeps the certificate)
 remove_domain() {
@@ -196,7 +222,10 @@ remove_domain() {
     rm -rf "$tmp"
   done
 
-  # ---- 2. certificate (not while another site still points at it)
+  # ---- 2. services that ran the app (nothing left for them to serve)
+  remove_site_units "$d"
+
+  # ---- 3. certificate (not while another site still points at it)
   if [[ $certact == delete ]]; then
     for dir in nginx apache2 httpd caddy; do
       if [[ -d $_R/etc/$dir ]]; then dirs+=("$_R/etc/$dir"); fi
@@ -210,7 +239,7 @@ remove_domain() {
     fi
   fi
 
-  # ---- 3. site files: moved, never deleted
+  # ---- 4. site files: moved, never deleted
   case "$filesact" in
     move)
       if run install -d -m 700 "$BACKUP_DIR/removed-sites" && run mv -- "$root" "$dest"; then

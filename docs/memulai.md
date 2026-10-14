@@ -133,6 +133,14 @@ memperbaikinya (lihat *Pemecahan masalah* di bawah) — itulah gunanya sesi itu 
 | Perbarui tool | `sudo vps-setup --update` |
 | Batalkan konfigurasinya | `sudo vps-setup --uninstall` (paket dan data tetap ada) |
 
+- **Menjalankan aplikasi Node, Python, atau Go?** Tambahkan situs dengan tipe *Aplikasi di balik proxy* dan
+  jawab Ya untuk "menjaga aplikasi tetap berjalan". Taruh kode di `/var/www/DOMAIN`, lalu
+  `sudo systemctl restart app-DOMAIN`. Log: `journalctl -u app-DOMAIN -f`.
+- **Laravel?** Tipe situs *Laravel* sekaligus menyiapkan scheduler dan queue worker. Setiap selesai deploy:
+  `sudo systemctl restart laravel-DOMAIN-queue`.
+- **HSTS** (ditanyakan setelah HTTPS) membuat browser menolak HTTP biasa selama setahun. Pilih Tidak jika
+  ragu; tidak ada yang hilang bila dibiarkan mati.
+
 - **Jalankan tool lagi kapan saja:** langkah yang sudah selesai otomatis dilewati.
 - **Lihat log lengkap:** semuanya ditulis ke `/var/log/vps-setup.log`.
 

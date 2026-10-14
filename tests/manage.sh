@@ -107,6 +107,19 @@ check  "remove c.example.com --purge-files"         remove_domain c.example.com
 reject "site folder gone from /var/www"             exists "$R/var/www/c.example.com"
 check  "...and its content sits in the backup dir"  bash -c "cat '$BACKUP_DIR'/removed-sites/c.example.com.*/public/index.html | grep -q hello"
 
+echo "== services of the site are removed with it =="
+mk_nginx_site s.example.com "reverse proxy"; CFG=(); clear_log
+mkdir -p "$R/etc/systemd/system"
+for u in app-s.example.com.service laravel-s.example.com-schedule.timer; do
+  printf '# Managed by vps-setup — test\n[Unit]\n' >"$R/etc/systemd/system/$u"
+done
+printf '[Unit]\n' >"$R/etc/systemd/system/laravel-s.example.com-queue.service"   # not ours
+check  "remove s.example.com"                       remove_domain s.example.com
+reject "app service file removed"                   exists "$R/etc/systemd/system/app-s.example.com.service"
+reject "scheduler timer removed"                    exists "$R/etc/systemd/system/laravel-s.example.com-schedule.timer"
+check  "app service was stopped and disabled"       logged "systemctl disable --now app-s.example.com.service"
+check  "a unit without the marker is kept"          exists "$R/etc/systemd/system/laravel-s.example.com-queue.service"
+
 echo "== --keep-cert =="
 mk_nginx_site d.example.com; CFG=([arg_keep_cert]=1); clear_log
 check  "remove d.example.com --keep-cert"           remove_domain d.example.com

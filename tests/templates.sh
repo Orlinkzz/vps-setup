@@ -19,17 +19,18 @@ pass() { echo "  ok   $*"; }
 bad()  { echo "  FAIL $*"; fail=1; }
 SOCK=/run/php/php8.3-fpm.sock
 
-vars() { # vars <domain> <www 0|1>  → prints KEY=value lines
-  local d=$1 www=$2 names=$1 comma=$1 alias=""
-  if [[ $www == 1 ]]; then names="$d www.$d"; comma="$d, www.$d"; alias="    ServerAlias www.$d"; fi
+vars() { # vars <domain> <www 0|1>  → prints KEY=value lines (www=1 also turns on Caddy's HSTS line)
+  local d=$1 www=$2 names=$1 comma=$1 alias="" hsts=""
+  if [[ $www == 1 ]]; then names="$d www.$d"; comma="$d, www.$d"; alias="    ServerAlias www.$d"
+    hsts='    header Strict-Transport-Security "max-age=31536000"'; fi
   printf '%s\n' "DOMAIN=$d" "SERVER_NAMES=$names" "SERVER_NAMES_COMMA=$comma" "SERVER_ALIAS_LINE=$alias" \
     "ROOT=/var/www/$d/public" "UPSTREAM=127.0.0.1:3999" "PHP_SOCKET_PATH=$SOCK" \
-    "REDIRECT_TARGET=https://example.org" "MAX_BODY=64m" "MAX_BODY_BYTES=67108864"
+    "REDIRECT_TARGET=https://example.org" "MAX_BODY=64m" "MAX_BODY_BYTES=67108864" "HSTS_LINE=$hsts"
 }
 
 # ------------------------------------------------------------------ placeholders
 echo "== every placeholder is provided by the code =="
-known='DOMAIN SERVER_NAMES SERVER_NAMES_COMMA SERVER_ALIAS_LINE ROOT UPSTREAM PHP_SOCKET_PATH REDIRECT_TARGET MAX_BODY MAX_BODY_BYTES GLOBAL_OPTIONS CATCHALL'
+known='DOMAIN SERVER_NAMES SERVER_NAMES_COMMA SERVER_ALIAS_LINE HSTS_LINE ROOT UPSTREAM PHP_SOCKET_PATH REDIRECT_TARGET MAX_BODY MAX_BODY_BYTES GLOBAL_OPTIONS CATCHALL'
 while IFS= read -r ph; do
   [[ " $known " == *" $ph "* ]] || bad "unknown placeholder {{$ph}}"
 done < <(grep -rhoE '\{\{[A-Z_]+\}\}' templates | tr -d '{}' | sort -u)

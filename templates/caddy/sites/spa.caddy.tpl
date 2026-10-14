@@ -3,6 +3,7 @@
     root * {{ROOT}}
     encode zstd gzip
     import security_headers
+{{HSTS_LINE}}
     import hide_dotfiles
     try_files {path} /index.html
     file_server

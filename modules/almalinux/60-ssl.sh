@@ -50,6 +50,8 @@ site_write_apache() {
 # PHP socket path differs on RHEL: one pool, one socket.
 php_fpm_sockets() { if [[ -S /run/php-fpm/www.sock ]]; then echo /run/php-fpm/www.sock; fi; return 0; }
 default_php_socket() { printf '/run/php-fpm/www.sock'; }
+# The stock pool runs as "apache", also when nginx serves the site
+_php_default_user() { printf 'apache'; }
 
 # Website folders belong to the group of the web server that serves them (no www-data on RHEL).
 web_group() {

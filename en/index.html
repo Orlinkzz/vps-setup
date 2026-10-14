@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>vps-setup: Set Up a Fresh Linux Server from a Menu</title>
+<meta name="description" content="A beginner-friendly interactive setup script for a fresh Linux VPS. Install a web server, databases, firewall and fail2ban from a menu, review first, then run. Open source, with dry-run and uninstall.">
+<meta name="keywords" content="vps setup, linux server setup, server hardening, install nginx, fail2ban, ubuntu firewall, server setup script, bash, open source, vps beginner guide">
+<meta name="author" content="Orlinkzz">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#0f1b2d">
+<link rel="canonical" href="https://orlinkzz.github.io/vps-setup/en/">
+<link rel="alternate" hreflang="id" href="https://orlinkzz.github.io/vps-setup/">
+<link rel="alternate" hreflang="en" href="https://orlinkzz.github.io/vps-setup/en/">
+<link rel="alternate" hreflang="x-default" href="https://orlinkzz.github.io/vps-setup/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="vps-setup">
+<meta property="og:locale" content="en_US">
+<meta property="og:url" content="https://orlinkzz.github.io/vps-setup/en/">
+<meta property="og:title" content="vps-setup: Set Up a Fresh Linux Server from a Menu">
+<meta property="og:description" content="A new server without memorising commands. Pick from a menu, answer a few questions, review, then run. Open source and beginner-friendly.">
+<meta property="og:image" content="https://orlinkzz.github.io/vps-setup/og-image.png">
+<meta property="og:image:secure_url" content="https://orlinkzz.github.io/vps-setup/og-image.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="vps-setup: set up a fresh Linux server from an interactive menu">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="vps-setup: Set Up a Fresh Linux Server from a Menu">
+<meta name="twitter:description" content="A new server without memorising commands. Pick from a menu, review, then run.">
+<meta name="twitter:image" content="https://orlinkzz.github.io/vps-setup/og-image.png">
+<meta name="twitter:image:alt" content="vps-setup: set up a fresh Linux server from an interactive menu">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareSourceCode",
+  "name": "vps-setup",
+  "description": "Beginner-friendly interactive setup for a fresh Linux server.",
+  "codeRepository": "https://github.com/Orlinkzz/vps-setup",
+  "programmingLanguage": "Bash",
+  "runtimePlatform": "Linux",
+  "url": "https://orlinkzz.github.io/vps-setup/en/",
+  "image": "https://orlinkzz.github.io/vps-setup/og-image.png",
+  "inLanguage": ["id", "en"],
+  "author": { "@type": "Person", "name": "Orlinkzz", "url": "https://github.com/Orlinkzz" }
+}
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700;800&family=JetBrains+Mono:wght@400;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --fog:#eef2f6; --paper:#fff; --ink:#14202b; --muted:#566574; --line:#d5dde5;
+  --navy:#0f1b2d; --navy2:#17263d; --amber:#ffb547; --blue:#2f5bea; --mint:#59d6a4;
+  --display:"Bricolage Grotesque",system-ui,sans-serif;
+  --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{overflow-x:hidden}
+img,svg{max-width:100%}
+body{margin:0;background:var(--fog);color:var(--ink);font:400 1.0625rem/1.65 var(--body);-webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:4px}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+header.top{display:flex;justify-content:space-between;align-items:center;padding:22px 0}
+.logo{font:800 1.25rem var(--display);color:var(--ink);text-decoration:none;letter-spacing:-.01em}
+.logo span{color:var(--blue)}
+nav a{margin-left:22px;color:var(--muted);text-decoration:none;font-weight:500;font-size:.95rem}
+nav a:hover{color:var(--ink)}
+.gh{background:var(--ink);color:#fff!important;padding:8px 16px;border-radius:999px}
+.lang{border:1px solid var(--line);padding:6px 12px;border-radius:999px;font:600 .82rem var(--body)!important;letter-spacing:.04em}
+.lang:hover{border-color:var(--muted)}
+
+.hero>*{min-width:0}
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:48px;align-items:center;padding:48px 0 72px}
+h1{font:800 clamp(2.4rem,5.2vw,3.9rem)/1.02 var(--display);letter-spacing:-.03em;margin:0 0 20px}
+.lead{font-size:1.2rem;color:var(--muted);max-width:30em;margin:0 0 28px}
+.cmd{display:flex;align-items:center;gap:10px;background:var(--navy);color:#e8eef7;border-radius:12px;padding:12px 12px 12px 18px;font:400 .88rem var(--mono);max-width:100%}
+.cmd{min-width:0;width:100%}
+.cmd code{overflow-x:auto;white-space:pre;flex:1 1 auto;min-width:0;scrollbar-width:none}
+.cmd code::-webkit-scrollbar{display:none}
+.cmd .p{color:var(--amber)}
+button.copy{font:600 .8rem var(--body);background:var(--amber);color:#2b1c00;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;flex:none}
+button.copy:hover{filter:brightness(1.06)}
+.small{font-size:.9rem;color:var(--muted);margin-top:12px}
+
+.term{background:var(--navy);border-radius:16px;box-shadow:0 30px 60px -25px rgba(15,27,45,.55);overflow:hidden}
+.term .bar{display:flex;align-items:center;gap:7px;padding:12px 16px;background:var(--navy2)}
+.term .bar i{width:11px;height:11px;border-radius:50%;background:#3a4b66}
+.term .bar b{margin-left:auto;font:400 .75rem var(--mono);color:#7f93b0}
+.term pre{margin:0;padding:20px 22px 26px;min-height:340px;font:400 .84rem/1.75 var(--mono);color:#cfd9e8;white-space:pre-wrap}
+.term .a{color:var(--amber)} .term .g{color:var(--mint)} .term .d{color:#7f93b0}
+.cursor{display:inline-block;width:8px;height:1em;background:var(--amber);vertical-align:-2px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+
+section{padding:64px 0}
+section.white{background:var(--paper)}
+h2{font:800 clamp(1.7rem,3.2vw,2.4rem)/1.12 var(--display);letter-spacing:-.02em;margin:0 0 14px}
+.sub{color:var(--muted);max-width:36em;margin:0 0 36px}
+
+.steps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;counter-reset:s}
+.steps li{counter-increment:s;padding:0 22px 0 0;position:relative}
+.steps li::before{content:counter(s);display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:var(--blue);color:#fff;font:700 .95rem var(--display);margin-bottom:14px}
+.steps li:not(:last-child)::after{content:"";position:absolute;top:17px;left:44px;right:10px;height:2px;background:var(--line)}
+.steps h3{font:700 1.1rem var(--display);margin:0 0 4px}
+.steps p{margin:0;color:var(--muted);font-size:.97rem}
+
+.cmds>*,.safe>*,.steps>*{min-width:0}
+.cmds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.card{background:var(--fog);border:1px solid var(--line);border-radius:14px;padding:22px}
+.card h3{font:700 1.1rem var(--display);margin:0 0 4px}
+.card p{margin:0 0 14px;color:var(--muted);font-size:.96rem}
+.card .cmd{font-size:.8rem}
+.card.wide{grid-column:1/-1}
+
+.safe{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:36px}
+.safe h3{font:700 1.15rem var(--display);margin:0 0 6px}
+.safe p{margin:0;color:var(--muted)}
+.safe code,.card code.i,p code{font:400 .86em var(--mono);background:#e3e9f0;padding:2px 6px;border-radius:5px}
+
+.ops{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}
+.ops span{background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:7px 15px;font-size:.93rem;font-weight:500}
+
+.cta{background:var(--navy);color:#fff;border-radius:22px;padding:48px;display:flex;justify-content:space-between;align-items:center;gap:28px;flex-wrap:wrap}
+.cta h2{margin:0 0 6px;color:#fff}
+.cta p{margin:0;color:#a9b8cf}
+.cta a.btn{background:var(--amber);color:#2b1c00;text-decoration:none;font-weight:700;padding:14px 26px;border-radius:12px}
+p,li,h1,h2,h3{overflow-wrap:break-word}
+.ops span{max-width:100%}
+footer{padding:36px 0 56px;color:var(--muted);font-size:.92rem;text-align:center}
+
+@media(max-width:900px){
+  .hero{grid-template-columns:minmax(0,1fr);gap:36px;padding-top:24px}
+  .steps{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:32px}
+  .steps li::after{display:none}
+  .cmds,.safe{grid-template-columns:minmax(0,1fr)}
+  header.top{flex-wrap:wrap;gap:10px}
+  nav{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+  nav a{margin-left:0}
+  .cta{padding:32px 24px}
+}
+@media(max-width:560px){
+  .wrap{padding:0 16px}
+  header.top{padding:16px 0}
+  .steps{grid-template-columns:minmax(0,1fr)}
+  .term pre{font-size:.74rem;min-height:300px;padding:16px}
+  .cmd{font-size:.76rem;padding:10px 10px 10px 14px}
+  .card{padding:18px}
+  section{padding:48px 0}
+  .cta{padding:28px 20px;border-radius:16px}
+  .cta a.btn{width:100%;text-align:center}
+  .lead{font-size:1.06rem}
+}
+@media(prefers-reduced-motion:reduce){.cursor{animation:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <a class="logo" href="./">vps<span>-</span>setup</a>
+    <nav>
+      <a href="#how">How it works</a>
+      <a href="#commands">Commands</a>
+      <a href="#safety">Safety</a>
+      <a class="lang" href="../" hreflang="id" lang="id" title="Versi Bahasa Indonesia">ID</a>
+      <a class="gh" href="https://github.com/Orlinkzz/vps-setup">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>A new server, no commands to memorise.</h1>
+      <p class="lead">Interactive setup for the Linux server you just rented. Pick from a menu, answer a few simple questions, review, then run.</p>
+      <div class="cmd">
+        <code id="main-cmd"><span class="p">$</span> curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash</code>
+        <button class="copy" data-target="main-cmd" data-text="curl -fsSL https://raw.githubusercontent.com/orlinkzz/vps-setup/main/install.sh | sudo bash">Copy</button>
+      </div>
+      <p class="small">Prefer to read it first? Use <a href="#commands">git clone</a> or <code>--dry-run</code>.<br>Supports Ubuntu 22.04 / 24.04, Debian 12 and AlmaLinux / Rocky 8 / 9.</p>
+    </div>
+
+    <div class="term" aria-label="Example of the vps-setup menu">
+      <div class="bar"><i></i><i></i><i></i><b>illustration</b></div>
+      <pre id="term" aria-live="off"></pre>
+    </div>
+  </div>
+</div>
+
+<section class="white" id="how">
+  <div class="wrap">
+    <h2>Four steps, no guesswork</h2>
+    <p class="sub">You stay in control. Nothing on the server changes before you agree.</p>
+    <ol class="steps">
+      <li><h3>Run it</h3><p>Install with one command, then just type <code>sudo vps-setup</code>. Or clone the repo and run <code>setup.sh</code>.</p></li>
+      <li><h3>Pick from the menu</h3><p>Tick what you need: web server, database, domains and more.</p></li>
+      <li><h3>Answer questions</h3><p>Only simple ones, like a domain name or a database name.</p></li>
+      <li><h3>Review, then run</h3><p>See the summary first. If it looks right, go ahead.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="commands">
+  <div class="wrap">
+    <h2>The commands you will use most</h2>
+    <p class="sub">After the curl install, the <code>vps-setup</code> command works from any folder. In a cloned repo, use <code>./setup.sh</code> inside the repo instead.</p>
+    <div class="cmds">
+      <div class="card">
+        <h3>Clone and run</h3>
+        <p>The recommended way if you want to read the script first.</p>
+        <div class="cmd"><code id="c1"><span class="p">$</span> git clone https://github.com/orlinkzz/vps-setup.git
+<span class="p">$</span> cd vps-setup &amp;&amp; sudo ./setup.sh</code><button class="copy" data-target="c1" data-text="git clone https://github.com/orlinkzz/vps-setup.git&#10;cd vps-setup &amp;&amp; sudo ./setup.sh">Copy</button></div>
+      </div>
+      <div class="card">
+        <h3>Preview without changing anything</h3>
+        <p><code>--dry-run</code> only shows what would be done.</p>
+        <div class="cmd"><code id="c2"><span class="p">$</span> sudo vps-setup --dry-run</code><button class="copy" data-target="c2" data-text="sudo vps-setup --dry-run">Copy</button></div>
+      </div>
+      <div class="card">
+        <h3>Use Bahasa Indonesia</h3>
+        <p>Menus and questions in Indonesian. English is the default.</p>
+        <div class="cmd"><code id="c3"><span class="p">$</span> sudo vps-setup --lang id</code><button class="copy" data-target="c3" data-text="sudo vps-setup --lang id">Copy</button></div>
+      </div>
+      <div class="card">
+        <h3>Add a website later</h3>
+        <p>Server already running? Add a new domain any time.</p>
+        <div class="cmd"><code id="c4"><span class="p">$</span> sudo vps-setup --add-domain</code><button class="copy" data-target="c4" data-text="sudo vps-setup --add-domain">Copy</button></div>
+      </div>
+      <div class="card">
+        <h3>Create a database later</h3>
+        <p>Add a database and user from the interactive menu.</p>
+        <div class="cmd"><code id="c5"><span class="p">$</span> sudo vps-setup --add-database</code><button class="copy" data-target="c5" data-text="sudo vps-setup --add-database">Copy</button></div>
+      </div>
+      <div class="card">
+        <h3>Run a Node, Python or Go app</h3>
+        <p>A proxy site can get an <code>app-DOMAIN</code> service too: it starts at boot and restarts itself after a crash.</p>
+        <div class="cmd"><code id="c9"><span class="p">$</span> sudo vps-setup --add-domain</code><button class="copy" data-target="c9" data-text="sudo vps-setup --add-domain">Copy</button></div>
+      </div>
+      <div class="card">
+        <h3>Unattended mode for scripts</h3>
+        <p>Skip the questions with a preset, for example a PostgreSQL database.</p>
+        <div class="cmd"><code id="c6"><span class="p">$</span> sudo vps-setup --yes --preset database --engine postgresql --db myapp</code><button class="copy" data-target="c6" data-text="sudo vps-setup --yes --preset database --engine postgresql --db myapp">Copy</button></div>
+      </div>
+      <div class="card">
+        <h3>Check the server's health</h3>
+        <p>Read-only checks: SSH, firewall, services, certificates and backups.</p>
+        <div class="cmd"><code id="c7"><span class="p">$</span> sudo vps-setup --doctor</code><button class="copy" data-target="c7" data-text="sudo vps-setup --doctor">Copy</button></div>
+      </div>
+      <div class="card wide">
+        <h3>Update or undo</h3>
+        <p>Get the newest version, or roll back what vps-setup configured.</p>
+        <div class="cmd"><code id="c8"><span class="p">$</span> sudo vps-setup --update
+<span class="p">$</span> sudo vps-setup --uninstall --dry-run</code><button class="copy" data-target="c8" data-text="sudo vps-setup --update&#10;sudo vps-setup --uninstall --dry-run">Copy</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="white" id="safety">
+  <div class="wrap">
+    <h2>Safe to try, easy to undo</h2>
+    <p class="sub">Changing a server's configuration is scary. That is why there is a safety net at every step.</p>
+    <div class="safe">
+      <div><h3>Files are backed up</h3><p>Every replaced file is saved to <code>/var/backups/vps-setup/</code>. A file is only rewritten when its content really changes.</p></div>
+      <div><h3>Everything is logged</h3><p>Every step goes to <code>/var/log/vps-setup.log</code>. Passwords are never written to it.</p></div>
+      <div><h3>Roll back</h3><p><code>vps-setup --uninstall</code> removes the files and settings vps-setup created and restores files from backup where needed. Web server and SSH configs are tested before they are reloaded, so websites and SSH access stay up. Important data, like databases and the MySQL root login, is left alone on purpose.</p></div>
+    </div>
+    <h3 style="font:700 1.15rem var(--display);margin:48px 0 4px">Day-to-day operations too</h3>
+    <p class="sub" style="margin-bottom:12px">Beyond the first setup, there are tools to keep the server healthy.</p>
+    <div class="ops">
+      <span>Database backups with rotation</span>
+      <span>Health monitoring (vps-setup-health)</span>
+      <span>Health check: vps-setup --doctor</span>
+      <span>App services (systemd) for Node, Python, Go</span>
+      <span>Laravel scheduler + queue worker</span>
+      <span>Opt-in HSTS per site</span>
+      <span>Real visitor IPs behind Cloudflare</span>
+      <span>fail2ban jails for Nginx: http-auth, botsearch, bad-request</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="cta">
+      <div>
+        <h2>Ready to set up your first server?</h2>
+        <p>Open source. Read the code, try it, send feedback.</p>
+      </div>
+      <a class="btn" href="https://github.com/Orlinkzz/vps-setup">Open on GitHub</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">vps-setup by <a href="https://github.com/Orlinkzz">Orlinkzz</a>. Beginner guide: <a href="https://github.com/Orlinkzz/vps-setup/blob/main/docs/getting-started.md">English</a> · <a href="https://github.com/Orlinkzz/vps-setup/blob/main/docs/memulai.md">Bahasa Indonesia</a> · <a href="https://github.com/Orlinkzz/vps-setup#readme">full documentation</a>. <a href="../" hreflang="id">Versi Bahasa Indonesia</a>.</div>
+</footer>
+
+<script>
+// Copy a command
+document.querySelectorAll('button.copy').forEach(function(b){
+  b.addEventListener('click',function(){
+    var t=b.getAttribute('data-text');
+    var done=function(){var o=b.textContent;b.textContent='Copied';setTimeout(function(){b.textContent=o},1500)};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,done)}
+    else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy')}catch(e){}document.body.removeChild(a);done()}
+  });
+});
+
+// Illustrated terminal
+var term=document.getElementById('term');
+var lines=[
+ '<span class="a">$</span> sudo vps-setup',
+ '',
+ '<span class="g">vps-setup</span> <span class="d">- Linux server setup</span>',
+ '',
+ '  Choose what to set up:',
+ '  <span class="g">[x]</span> Web server',
+ '  <span class="g">[x]</span> Database',
+ '  <span class="g">[x]</span> Firewall + fail2ban',
+ '  <span class="d">[ ]</span> Extra domain',
+ '',
+ '<span class="a">?</span> Domain name: <span class="g">example.com</span>',
+ '<span class="a">?</span> Continue after review? <span class="g">yes</span>',
+ '',
+ '<span class="g">Done.</span> <span class="d">Log: /var/log/vps-setup.log</span> <span class="cursor"></span>'
+];
+var full=lines.join('\n');
+var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(reduce){term.innerHTML=full}
+else{
+  var i=0;
+  (function step(){
+    i++;
+    term.innerHTML=lines.slice(0,i).join('\n');
+    if(i<lines.length){setTimeout(step,i<3?500:380)}
+  })();
+}
+</script>
+</body>
+</html>

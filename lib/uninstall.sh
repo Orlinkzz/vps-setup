@@ -52,6 +52,13 @@ act() {
   "$@"
 }
 
+# remove_tree <path>: the same for a folder (or file) and everything in it
+remove_tree() {
+  [[ -e $1 ]] || return 0
+  if (( UNINSTALL_DRY )); then echo "  [dry-run] would remove: $1"; return 0; fi
+  if rm -rf "$1"; then echo "  removed: $1"; else echo "  WARN: could not remove $1"; fi
+}
+
 # remove <path...>: delete files that exist and say so; missing files are silent
 remove() {
   local f
@@ -237,7 +244,7 @@ remove /usr/local/bin/vps-setup-backup /usr/local/bin/vps-setup-health \
        /etc/systemd/system/frankenphp.service
 act systemctl daemon-reload >/dev/null 2>&1 || true
 
-if [[ -d /var/www/_default ]]; then act rm -rf /var/www/_default && echo "  removed: /var/www/_default"; fi
+remove_tree /var/www/_default
 
 # Software installed outside the package manager (like packages, it stays)
 if [[ -d /opt/bun ]]; then
@@ -251,10 +258,25 @@ if [[ -n $stopped ]]; then
   echo "    sudo systemctl enable --now $stopped"
 fi
 
-# Settings + state
-for d in /etc/vps-setup /var/lib/vps-setup; do
-  if [[ -d $d ]]; then act rm -rf "$d" && echo "  removed: $d"; fi
-done
+# Websites keep running, and so do the services that run their apps (app-*, laravel-*):
+# they are removed with their site (vps-setup --remove-domain DOMAIN), not here.
+units=$(grep -lsF "Managed by vps-setup" /etc/systemd/system/app-*.service /etc/systemd/system/laravel-*.service \
+          /etc/systemd/system/laravel-*.timer 2>/dev/null | xargs -r -n1 basename | tr '\n' ' ')
+if [[ -n $units ]]; then
+  echo "  KEPT: app services of your websites: $units"
+fi
+
+# Settings + state. The app secrets in /etc/vps-setup/apps are still read by those services.
+if [[ -n $(ls -A /etc/vps-setup/apps 2>/dev/null) ]]; then
+  for f in /etc/vps-setup/*; do
+    [[ $f == /etc/vps-setup/apps ]] && continue
+    remove_tree "$f"
+  done
+  echo "  KEPT: /etc/vps-setup/apps (secrets of your app services)"
+else
+  remove_tree /etc/vps-setup
+fi
+remove_tree /var/lib/vps-setup
 
 # Swap file (if created by vps-setup)
 if [[ -f /swapfile ]] && grep -q '/swapfile' /etc/fstab 2>/dev/null; then

@@ -3,6 +3,7 @@
     root * {{ROOT}}
     encode zstd gzip
     import security_headers
+{{HSTS_LINE}}
     import hide_dotfiles
     # Only the front controller runs; other .php files under public/ are never executed
     @php_other {

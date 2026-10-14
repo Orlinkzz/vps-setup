@@ -70,17 +70,29 @@ All notable changes to vps-setup. Versions follow [SemVer](https://semver.org/);
 - Docker: published container ports listen on `127.0.0.1` by default, because Docker's rules bypass
   UFW/firewalld.
 - Backups and the nightly health snapshot run from systemd timers (minimal images have no cron).
+- **App service for `proxy` sites:** the domain wizard can create `app-DOMAIN.service`, which starts the
+  app at boot and restarts it when it crashes (Node, Python, Go or any command; `--app-cmd` with `--yes`).
+  The app runs as the admin user without privilege escalation, listens on `127.0.0.1`, reads secrets from
+  `/etc/vps-setup/apps/DOMAIN.env`, and waits for the first deploy instead of failing in a loop.
+- **Laravel scheduler and queue worker** for `laravel` sites: a timer runs `schedule:run` every minute and
+  a service runs `queue:work`, both as the PHP-FPM user and only once `artisan` exists (`--no-workers` to skip).
+- **HSTS, opt-in per site** (`--hsts`): Certbot adds the header for Nginx/Apache, the Caddy site gets it
+  directly. One year, without `includeSubDomains` or `preload`. Off by default.
+- `--remove-domain` also stops and removes the site's app/Laravel services. Uninstall keeps them, and
+  keeps the app secrets in `/etc/vps-setup/apps`.
 
 ### Tests and CI
 - CI validates every template against real Nginx, Apache and Caddy, runs `tests/manage.sh`, and runs the
   non-destructive tests plus Nginx template checks in AlmaLinux 8/9, Rocky 8/9, Debian 12 and Ubuntu 22.04
   containers. These distro jobs now block the build (Debian 13 stays experimental).
 - New checks: `en.sh` and `id.sh` define the same keys; the Indonesian dry run must succeed; uninstall
-  `--dry-run`; the backup script with a failing dump; the global command, `--doctor`, `--update`, `--uninstall`.
+  `--dry-run`; the backup script with a failing dump; the global command, `--doctor`, `--update`, `--uninstall`;
+  the generated app/Laravel unit files; HSTS in templates; site services removed with `--remove-domain`.
 
 ### Docs
 - Beginner guides (EN/ID): how to make an SSH key before key-only login is enabled, the `vps-setup`
   command, a command table, and troubleshooting (locked out of SSH, certificate not issued, port 80 busy).
+- The landing page has an English version (`en/index.html`) with a language switch.
 - README: one layout section, firewall wording for UFW and firewalld, correct pinning syntax (the
   `v0.6.2` tag in the old example was never published), CHANGELOG and SECURITY policy.
 
