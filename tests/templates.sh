@@ -45,11 +45,19 @@ if command -v nginx >/dev/null 2>&1; then
   echo "== nginx $(nginx -v 2>&1 | sed 's|.*/||') =="
   T=$(mktemp -d); mkdir -p "$T"/{conf.d,sites,snippets/vps-setup,logs}
   cp templates/nginx/snippets/*.conf "$T/snippets/vps-setup/"
-  cp /etc/nginx/snippets/fastcgi-php.conf "$T/snippets/"
+  # Debian ships snippets/fastcgi-php.conf; RHEL-family nginx does not, and vps-setup installs its own copy
+  if [[ -f /etc/nginx/snippets/fastcgi-php.conf ]]; then cp /etc/nginx/snippets/fastcgi-php.conf "$T/snippets/"
+  else cp templates/nginx/snippets/fastcgi-php.conf "$T/snippets/"; fi
   cp /etc/nginx/{fastcgi_params,fastcgi.conf,mime.types} "$T/"
   render_tpl templates/nginx/00-vps-setup.conf.tpl MAX_BODY=64m >"$T/conf.d/00-vps-setup.conf"
   nginx_filter <templates/nginx/default-page.conf.tpl >"$T/sites/00-default.conf"
-  nginx_filter <templates/nginx/default-https.conf.tpl >"$T/sites/00-default-https.conf"
+  # Like the tool itself: the HTTPS catch-all needs ssl_reject_handshake (nginx >= 1.19.4)
+  nv=$(nginx -v 2>&1 | sed -n 's|.*nginx/\([0-9.]*\).*|\1|p')
+  if [[ $(printf '%s\n1.19.4\n' "$nv" | sort -V | head -n 1) == 1.19.4 ]]; then
+    nginx_filter <templates/nginx/default-https.conf.tpl >"$T/sites/00-default-https.conf"
+  else
+    echo "  --   nginx $nv is older than 1.19.4: HTTPS catch-all not tested (the tool skips it too)"
+  fi
   for ty in "${TYPES[@]}"; do
     mapfile -t v < <(vars "t-$ty.test" 1)
     render_tpl "templates/nginx/sites/$ty.conf.tpl" "${v[@]}" | nginx_filter >"$T/sites/t-$ty.test.conf" || bad "render $ty"

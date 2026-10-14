@@ -24,7 +24,7 @@ _db_ready() {
 
 _backup_dir() {
   local dir="$BACKUP_ROOT/db"
-  install -d -m 750 "$dir"
+  (( DRY_RUN )) || install -d -m 750 "$dir"
   printf '%s' "$dir"
 }
 
@@ -48,17 +48,54 @@ prompt_db_backup() {
   (( ASSUME_YES )) && CFG[backup_retention]=${CFG[backup_retention]:-7}
 }
 
+# systemd_timer <name> <OnCalendar> <command> <description>
+# Runs <command> as root on a schedule. systemd timers work on every supported system; minimal
+# images (AlmaLinux/Rocky containers, some cloud images) do not ship a cron daemon.
+systemd_timer() {
+  local name=$1 when=$2 cmd=$3 desc=$4
+  write_file "/etc/systemd/system/$name.service" 644 <<EOF
+# Managed by vps-setup
+[Unit]
+Description=$desc
+
+[Service]
+Type=oneshot
+ExecStart=$cmd
+EOF
+  write_file "/etc/systemd/system/$name.timer" 644 <<EOF
+# Managed by vps-setup
+[Unit]
+Description=$desc (schedule)
+
+[Timer]
+OnCalendar=$when
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+  run systemctl daemon-reload
+  run systemctl enable --now "$name.timer"
+  # Older versions used cron for the same job
+  [[ -e /etc/cron.d/$name ]] && run rm -f "/etc/cron.d/$name"
+  return 0
+}
+
 run_db_backup() {
   local dir retention=${CFG[backup_retention]:-7}
   dir=$(_backup_dir)
 
   log_info "$(t ops.backup.creating)"
 
-  # Write the backup script
+  # Write the backup script (the same on every supported system)
   write_file /usr/local/bin/vps-setup-backup 750 <<'SCRIPT'
 #!/usr/bin/env bash
-# Managed by vps-setup — runs daily via cron
+# Managed by vps-setup — runs daily (systemd timer vps-setup-backup.timer)
+# A dump only counts when the whole pipeline succeeded: it is written to a temporary file first
+# and renamed at the end, so a half-written .sql.gz never looks like a good backup.
 set -uo pipefail
+umask 077
 LOG=/var/log/vps-setup-backup.log
 DIR=/var/backups/vps-setup/db
 RETENTION=7
@@ -67,28 +104,45 @@ RETENTION=7
 
 mkdir -p "$DIR"
 echo "=== $(date) ===" >>"$LOG"
+failed=0
+stamp=$(date +%F)
 
-# PostgreSQL
-if command -v pg_dumpall >/dev/null 2>&1; then
-  for db in $(sudo -u postgres psql -t -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname != 'postgres'" 2>/dev/null); do
-    db=$(echo "$db" | tr -d ' ')
-    [ -z "$db" ] && continue
-    sudo -u postgres pg_dump "$db" | gzip > "$DIR/${db}_postgresql_$(date +%F).sql.gz"
-    echo "  pg: $db" >>"$LOG"
+# dump <name> <engine> <command...>: run the dump command, gzip it, keep it only on success
+dump() {
+  local name=$1 engine=$2; shift 2
+  local out="$DIR/${name}_${engine}_${stamp}.sql.gz"
+  if "$@" | gzip >"$out.part" && gzip -t "$out.part" 2>/dev/null; then
+    mv -f "$out.part" "$out"
+    echo "  ok   $engine: $name" >>"$LOG"
+  else
+    rm -f "$out.part"
+    echo "  FAIL $engine: $name" >>"$LOG"
+    failed=1
+  fi
+}
+
+# PostgreSQL ("runuser" exists everywhere; minimal Debian has no sudo)
+if command -v pg_dump >/dev/null 2>&1 && id postgres >/dev/null 2>&1; then
+  for db in $(runuser -u postgres -- psql -At -c "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres'" 2>>"$LOG"); do
+    dump "$db" postgresql runuser -u postgres -- pg_dump "$db"
   done
 fi
 
-# MySQL / MariaDB
-if command -v mysql >/dev/null 2>&1; then
-  for db in $(mysql -NBe "SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('mysql','information_schema','performance_schema','sys')" 2>/dev/null); do
-    mysqldump "$db" | gzip > "$DIR/${db}_mysql_$(date +%F).sql.gz"
-    echo "  mysql: $db" >>"$LOG"
+# MySQL / MariaDB (root login from /root/.my.cnf or the unix socket)
+if command -v mysqldump >/dev/null 2>&1; then
+  for db in $(mysql -NBe "SELECT schema_name FROM information_schema.schemata WHERE schema_name NOT IN ('mysql','information_schema','performance_schema','sys')" 2>>"$LOG"); do
+    dump "$db" mysql mysqldump --single-transaction --routines --triggers --events "$db"
   done
 fi
 
-# Rotate older than RETENTION days
+# Rotate older than RETENTION days (only complete dumps carry the .sql.gz name)
 find "$DIR" -name '*.sql.gz' -mtime "+$RETENTION" -delete
+find "$DIR" -name '*.sql.gz.part' -delete
 echo "  retention: $RETENTION days" >>"$LOG"
+if [ "$failed" -ne 0 ]; then
+  echo "  RESULT: at least one backup FAILED" >>"$LOG"
+  exit 1
+fi
 SCRIPT
 
   # Write retention override
@@ -97,16 +151,7 @@ SCRIPT
 RETENTION=$retention
 EOF
 
-  # Cron daily
-  if (( ! DRY_RUN )); then
-    install -d -m 755 /etc/cron.d
-    write_file /etc/cron.d/vps-setup-backup 644 <<EOF
-# Managed by vps-setup — DB backups
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-0 3 * * * root /usr/local/bin/vps-setup-backup >/dev/null 2>&1
-EOF
-  fi
+  systemd_timer vps-setup-backup "*-*-* 03:00:00" /usr/local/bin/vps-setup-backup "vps-setup database backups"
 
   log_ok "$(t ops.backup.done)"
 }
@@ -129,22 +174,29 @@ run_monitoring() {
   write_file /usr/local/bin/vps-setup-health 750 <<'SCRIPT'
 #!/usr/bin/env bash
 # Managed by vps-setup — run: sudo vps-setup-health
-# Prints a one-page system health summary.
+# Prints a one-page system health summary. Works on Debian/Ubuntu and AlmaLinux/Rocky.
 set -uo pipefail
 
 echo "=== System Health ==="
 echo "Uptime:  $(uptime -p | sed 's/up //')"
-echo "Load:    $(cat /proc/loadavg | cut -d' ' -f1-3)"
+echo "Load:    $(cut -d' ' -f1-3 /proc/loadavg)"
 echo "Memory:  $(free -h | awk '/^Mem:/{print $3 " / " $2}')"
 echo "Disk:    $(df -h / | awk 'NR==2{print $3 " / " $2 " (" $5 ")"}')"
 echo "Swap:    $(free -h | awk '/^Swap:/{print $3 " / " $2}')"
 echo ""
 
 echo "=== Services ==="
-for svc in ssh fail2ban nginx apache2 caddy postgresql mysql redis-server docker unattended-upgrades; do
-  if systemctl is-active --quiet "$svc" 2>/dev/null; then echo "  ✓ $svc"
-  elif systemctl list-units --type=service --state=failed 2>/dev/null | grep -q "$svc"; then echo "  ✗ $svc (failed)"
+# Names differ per distro (ssh/sshd, apache2/httpd, redis-server/redis ...): only units that exist are shown
+for svc in ssh sshd fail2ban ufw firewalld nginx apache2 httpd caddy php-fpm postgresql mysql mariadb \
+           redis-server redis docker unattended-upgrades dnf-automatic.timer vps-setup-backup.timer; do
+  systemctl cat "$svc" >/dev/null 2>&1 || continue   # not installed on this system
+  if systemctl is-active --quiet "$svc"; then echo "  ✓ $svc"
+  elif systemctl is-enabled --quiet "$svc" 2>/dev/null; then echo "  ✗ $svc ($(systemctl is-active "$svc" 2>/dev/null))"
   fi
+done
+# Debian/Ubuntu name PHP-FPM after its version (php8.3-fpm ...)
+for unit in $(systemctl list-units --type=service --all --no-legend 'php*-fpm.service' 2>/dev/null | awk '{print $1}' | grep -E '^php[0-9.]+-fpm'); do
+  if systemctl is-active --quiet "$unit"; then echo "  ✓ $unit"; else echo "  ✗ $unit"; fi
 done
 
 echo ""
@@ -153,27 +205,24 @@ DIR=/var/backups/vps-setup/db
 if [ -d "$DIR" ]; then
   count=$(find "$DIR" -name '*.sql.gz' 2>/dev/null | wc -l)
   echo "  DB backup files: $count"
-  ls -1 "$DIR" 2>/dev/null | tail -5 | sed 's/^/    /'
+  find "$DIR" -name '*.sql.gz' -printf '%T@ %f\n' 2>/dev/null | sort -n | tail -5 | cut -d' ' -f2 | sed 's/^/    /'
+  if grep -q 'RESULT: at least one backup FAILED' <(tail -n 30 /var/log/vps-setup-backup.log 2>/dev/null); then
+    echo "  ✗ the last backup run reported a failure: see /var/log/vps-setup-backup.log"
+  fi
 else
   echo "  No backup directory"
 fi
 
 echo ""
 echo "=== Last login failures ==="
-journalctl -u ssh --since "1 day ago" -o cat 2>/dev/null | grep -c "Failed password" | xargs -I{} echo "  {} failed SSH attempts (24h)"
+n=$(journalctl -u ssh -u sshd --since "1 day ago" -o cat 2>/dev/null | grep -cE "Failed password|Invalid user")
+echo "  $n failed SSH attempts (24h)"
 SCRIPT
   run chmod +x /usr/local/bin/vps-setup-health
 
-  # Health check cron (nightly, writes to log only)
-  if (( ! DRY_RUN )); then
-    install -d -m 755 /etc/cron.d
-    write_file /etc/cron.d/vps-setup-health 644 <<'EOF'
-# Managed by vps-setup — nightly health snapshot
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-0 5 * * * root /usr/local/bin/vps-setup-health >/var/log/vps-setup-health.log 2>&1
-EOF
-  fi
+  # Nightly health snapshot (systemd timer; the output goes to the journal and a log file)
+  systemd_timer vps-setup-health "*-*-* 05:00:00" \
+    "/bin/sh -c '/usr/local/bin/vps-setup-health >/var/log/vps-setup-health.log 2>&1'" "vps-setup nightly health snapshot"
 
   log_ok "$(t ops.monitor.done)"
 }

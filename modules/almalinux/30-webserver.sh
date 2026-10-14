@@ -12,20 +12,51 @@ installed_webservers() {
   return 0
 }
 
+# PHP templates include snippets/fastcgi-php.conf, which only Debian's nginx package ships.
+ensure_nginx_fastcgi_snippet() {
+  local f=/etc/nginx/snippets/fastcgi-php.conf
+  if [[ -e $f ]] && ! grep -qs 'Managed by vps-setup' "$f"; then return 0; fi
+  run install -d -m 755 /etc/nginx/snippets
+  write_file "$f" 644 <"$TPL_DIR/nginx/snippets/fastcgi-php.conf"
+}
+
+# Apache site templates log to ${APACHE_LOG_DIR}, a variable only Debian's apache2 defines.
+ensure_apache_env() {
+  write_file /etc/httpd/conf.d/00-vps-setup-env.conf 644 <<'EOF'
+# Managed by vps-setup — variables the site templates use (Debian's apache2 sets them in envvars)
+<IfDefine !APACHE_LOG_DIR>
+    Define APACHE_LOG_DIR /var/log/httpd
+</IfDefine>
+EOF
+}
+
+# SELinux: nginx and httpd both run as httpd_t and may not open outbound connections (reverse
+# proxy to 127.0.0.1:PORT, PHP-FPM over TCP) unless this boolean is on.
+ws_selinux_allow_proxy() {
+  if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled && command -v setsebool >/dev/null 2>&1; then
+    run setsebool -P httpd_can_network_connect 1
+  fi
+}
+
 # RHEL nginx: sites live in conf.d/, there is no sites-available/sites-enabled pattern.
 run_webserver_nginx() {
   local f body snip=/etc/nginx/snippets/vps-setup tpl=default-drop
   log_info "$(t web.installing Nginx)"
   pkg_install nginx
 
-  install -d -m 755 /etc/nginx/snippets /etc/nginx/conf.d
+  run install -d -m 755 /etc/nginx/snippets /etc/nginx/conf.d
 
   for f in security-headers deny-hidden static-cache proxy-params; do
     write_file "$snip/$f.conf" 644 <"$TPL_DIR/nginx/snippets/$f.conf"
   done
+  ensure_nginx_fastcgi_snippet
+  ws_selinux_allow_proxy
   body=$(render_tpl "$TPL_DIR/nginx/00-vps-setup.conf.tpl" MAX_BODY="$MAX_BODY") || return 1
   printf '%s\n' "$body" | write_file /etc/nginx/conf.d/00-vps-setup.conf 644
+  backup_file /etc/nginx/nginx.conf
   run sed -i -E 's/^\s*worker_processes\s+.*/worker_processes auto;/' /etc/nginx/nginx.conf
+  # The stock server block in nginx.conf (EL8) claims default_server, which clashes with ours
+  run sed -i -E 's/^([[:space:]]*listen[[:space:]]+(\[::\]:)?80)[[:space:]]+default_server;/\1;/' /etc/nginx/nginx.conf
   run sed -i -E 's/^[[:space:]]*(types_hash_max_size|keepalive_timeout|server_tokens|client_max_body_size|client_body_timeout|client_header_timeout|send_timeout|gzip|gzip_vary|gzip_proxied|gzip_comp_level|gzip_min_length|gzip_types|gzip_buffers|gzip_http_version)[[:space:]].*/# (vps-setup) &/' /etc/nginx/nginx.conf
 
   if [[ ${CFG[web_catchall]:-page} == page ]]; then tpl=default-page; ws_default_page; fi
@@ -48,15 +79,13 @@ run_webserver_apache() {
   log_info "$(t web.installing Apache)"
   pkg_install httpd mod_ssl
 
-  # SELinux: allow httpd to make outbound proxy connections
-  if command -v setsebool >/dev/null 2>&1; then
-    run setsebool -P httpd_can_network_connect 1
-  fi
+  ws_selinux_allow_proxy
 
   # Apache on RHEL: /etc/httpd/conf.d/ instead of conf-available + a2enconf
-  install -d -m 755 /etc/httpd/conf.d
+  run install -d -m 755 /etc/httpd/conf.d
   body=$(render_tpl "$TPL_DIR/apache/vps-setup.conf.tpl" MAX_BODY="$MAX_BODY" MAX_BODY_BYTES="$MAX_BODY_BYTES") || return 1
   printf '%s\n' "$body" | write_file /etc/httpd/conf.d/00-vps-setup.conf 644
+  ensure_apache_env
 
   # Drop stock welcome page config so our catch-all wins
   run rm -f /etc/httpd/conf.d/welcome.conf
@@ -87,4 +116,11 @@ ws_ufw_open() {
     run firewall-cmd --reload
     log_info "$(t web.ufw_opened)"
   fi
+}
+
+# Caddy for RHEL-family systems comes from the project's official COPR repository.
+caddy_install_pkg() {
+  pkg_install dnf-plugins-core
+  run dnf "${DNF_OPTS[@]}" -y copr enable @caddy/caddy
+  pkg_install caddy
 }

@@ -16,7 +16,7 @@ run_mysql() {
   local bp=$(( MEM_MB * 25 / 100 / share ))  # innodb_buffer_pool
   (( bp < 64 )) && bp=64; (( bp > 4096 )) && bp=4096
 
-  install -d -m 755 /etc/mysql/mariadb.conf.d
+  run install -d -m 755 /etc/mysql/mariadb.conf.d
   write_file /etc/mysql/mariadb.conf.d/vps-setup-tuning.cnf 644 <<EOF
 # Managed by vps-setup — RAM-based tuning
 [mysqld]
@@ -27,6 +27,7 @@ character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
 EOF
 
-  svc_enable_now mariadb || svc_restart mariadb
+  svc_enable_now mariadb
+  svc_restart mariadb
   log_ok "$(t db.mysql.done)"
 }

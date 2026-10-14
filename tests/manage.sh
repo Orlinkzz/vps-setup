@@ -30,7 +30,7 @@ mkstub httpd     'echo "httpd $*" >>"$STUB_LOG"; exit 0'
 mkstub caddy     'echo "caddy $*" >>"$STUB_LOG"; exit 0'
 mkstub systemctl 'echo "systemctl $*" >>"$STUB_LOG"; exit 0'
 mkstub certbot   'echo "certbot $*" >>"$STUB_LOG"; [ "$1" = delete ] && rm -rf "$VPS_SETUP_ROOT/etc/letsencrypt/live/$3"; exit 0'
-mkstub sudo      'shift 2; exec "$@"'
+mkstub runuser   'shift 3; exec "$@"'   # runuser -u postgres -- CMD...
 mkstub psql      'echo "psql $*" >>"$STUB_LOG"
 case "$*" in
   *"FROM pg_database d JOIN"*) printf "app1 owner1\napp2 owner2\n" ;;

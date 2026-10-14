@@ -17,14 +17,15 @@ server {
         try_files $uri $uri/ /index.php?$args;
     }
 
+    # Never execute PHP from upload folders. Must come BEFORE the \.php$ block:
+    # nginx uses the first regex location that matches.
+    location ~* /(?:uploads|files)/.*\.php$ {
+        deny all;
+    }
+
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:{{PHP_SOCKET_PATH}};
-    }
-
-    # Never execute PHP from upload folders.
-    location ~* /(?:uploads|files)/.*\.php$ {
-        deny all;
     }
 
     # Uncomment if you do not use XML-RPC (reduces brute-force noise):

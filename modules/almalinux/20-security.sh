@@ -67,13 +67,18 @@ EOF
 
 # ------------------------------------------------------------ dnf-automatic
 run_auto_updates() {
+  local reboot_line=""
   pkg_install dnf-automatic
+  # "reboot =" exists in dnf-automatic on EL9 and newer only
+  if [[ ${CFG[auto_reboot]:-0} == 1 && ${OS_VERSION%%.*} -ge 9 ]]; then reboot_line="reboot = when-needed"; fi
+  backup_file /etc/dnf/automatic.conf
   write_file /etc/dnf/automatic.conf 644 <<EOF
 # Managed by vps-setup
 [commands]
 upgrade_type = security
 random_sleep = 0
 apply_updates = yes
+${reboot_line}
 
 [emitters]
 emit_via = stdio

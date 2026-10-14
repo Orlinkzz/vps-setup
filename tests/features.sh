@@ -131,5 +131,32 @@ else
   echo "  skip python3 not installed"
 fi
 
+echo "== backup script: a failed dump is reported and never kept =="
+# Run the generated backup script against stub mysql/mysqldump in a temp dir (no root, no real DB).
+B=$(mktemp -d)
+mkdir -p "$B/bin" "$B/dir"
+awk '/^run_db_backup\(\)/,0' modules/ubuntu/70-ops.sh | sed -n "/<<'SCRIPT'/,/^SCRIPT\$/p" | sed '1d;$d' \
+  | sed -e "s#^LOG=.*#LOG=$B/log#" -e "s#^DIR=.*#DIR=$B/dir#" -e 's#/etc/vps-setup/backup.conf#/nonexistent#' >"$B/backup.sh"
+printf '#!/bin/bash\nprintf "good\\nbad\\n"\n' >"$B/bin/mysql"
+printf '#!/bin/bash\nfor a; do db=$a; done\n[ "$db" = bad ] && { echo partial; exit 2; }\necho "-- dump of $db"\n' >"$B/bin/mysqldump"
+chmod +x "$B/bin/"*
+PATH="$B/bin:$PATH" bash "$B/backup.sh"; brc=$?
+check "backup exits non-zero when one dump fails" test "$brc" -ne 0
+check "the good dump is kept" bash -c 'ls "$1"/dir/good_mysql_*.sql.gz >/dev/null 2>&1' _ "$B"
+check "the failed dump leaves no .sql.gz behind" bash -c '! ls "$1"/dir/bad_* >/dev/null 2>&1' _ "$B"
+check "the log names the failure" grep -q "FAIL mysql: bad" "$B/log"
+rm -rf "$B"
+
+echo "== global command, --doctor, --update, --uninstall =="
+L=$(mktemp -d); ln -s "$PWD/setup.sh" "$L/vps-setup"
+check "works through a symlink (vps-setup in /usr/local/bin)" bash -c '"$1" --version | grep -q "^vps-setup "' _ "$L/vps-setup"
+check "--help lists --doctor through the symlink" bash -c '"$1" --help | grep -q -- "--doctor"' _ "$L/vps-setup"
+rm -rf "$L"
+out=$(bash ./setup.sh --doctor 2>&1); drc=$?
+check "--doctor finishes with a result line (exit 0 or 1, never a crash)" bash -c '[[ $1 == 0 || $1 == 1 ]] && grep -qE "^Result: " <<<"$2"' _ "$drc" "$out"
+check "--doctor in Indonesian" bash -c 'bash ./setup.sh --lang id --doctor 2>&1 | grep -qE "^Hasil: "'
+check "--update --dry-run changes nothing" bash -c 'bash ./setup.sh --dry-run --update 2>&1 | grep -q "\[dry-run\]"'
+check "--uninstall --dry-run runs the rollback preview" bash -c 'bash ./setup.sh --dry-run --uninstall 2>&1 | grep -q "DRY RUN: nothing is changed"'
+
 (( fail )) && echo "FEATURE TESTS FAILED" || echo "feature tests passed"
 exit $fail

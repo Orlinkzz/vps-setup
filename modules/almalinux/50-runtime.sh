@@ -4,18 +4,33 @@
 # shellcheck source=../ubuntu/50-runtime.sh
 source "$ROOT_DIR/modules/ubuntu/50-runtime.sh"
 
+# The newest PHP module stream AppStream offers (the default stream is old: 7.2 on EL8, 8.0 on EL9).
+_php_newest_stream() {
+  command -v dnf >/dev/null 2>&1 || return 1
+  dnf -q module list php 2>/dev/null | awk '$1=="php" && $2 ~ /^[0-9]+\.[0-9]+$/ {print $2}' | sort -V | tail -n 1
+}
+
 _system_php_ver() {
+  local v
+  v=$(_php_newest_stream 2>/dev/null) || v=""
+  if [[ -n $v ]]; then printf '%s' "$v"; return; fi
   case "$OS_VERSION" in
-    8) printf '8.0' ;;
-    9) printf '8.1' ;;
-    *) printf '8.1' ;;
+    8) printf '8.2' ;;
+    *) printf '8.3' ;;
   esac
 }
 
-# RHEL 9 ships PHP in AppStream; remi provides extra versions. Keep it simple: distro PHP.
+# Only AppStream's module streams are used (no third-party repo); the newest one is enabled.
+prompt_php_runtime() { CFG[php_ver]=$(_system_php_ver); }
+
 run_php_runtime() {
-  local ver
-  log_info "$(t runtime.php.installing "system")"
+  local ver stream
+  stream=$(_php_newest_stream 2>/dev/null) || stream=""
+  log_info "$(t runtime.php.installing "${stream:-system}")"
+  if [[ -n $stream ]] && ! pkg_installed php-fpm; then
+    run dnf "${DNF_OPTS[@]}" -y module reset php
+    run dnf "${DNF_OPTS[@]}" -y module enable "php:$stream"
+  fi
 
   pkg_install php php-fpm php-cli php-mbstring php-xml php-curl php-gd \
     php-intl php-bcmath php-zip php-soap php-mysqlnd php-pgsql php-opcache
@@ -31,6 +46,9 @@ run_php_runtime() {
     run_sh "cd /tmp && curl -fsS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer"
     run chmod +x /usr/local/bin/composer
   fi
+
+  # Unlike Debian, the RHEL package does not start the service
+  svc_enable_now php-fpm
 
   ver=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;' 2>/dev/null || _system_php_ver)
   CFG[php_ver]=$ver
@@ -65,6 +83,7 @@ run_docker_runtime() {
     run_sh "curl -fsSL https://get.docker.com | bash"
   fi
   svc_enable_now docker
+  docker_bind_localhost
 
   local u=${CFG[username]:-}
   if [[ -n $u ]] && id "$u" >/dev/null 2>&1; then run usermod -aG docker "$u"; fi

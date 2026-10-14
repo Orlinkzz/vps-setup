@@ -1,0 +1,43 @@
+name: Release
+
+# Push a tag such as v0.7.0 (matching VERSION in setup.sh) to publish a release. The release notes
+# list the SHA256 of the exact archive install.sh downloads, so users can pin and verify:
+#   curl -fsSL .../v0.7.0/install.sh | sudo VPS_SETUP_REF=v0.7.0 VPS_SETUP_SHA256=<sha256> bash
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: The tag matches VERSION in setup.sh
+        run: |
+          v=$(sed -n 's/^VERSION="\(.*\)"/\1/p' setup.sh)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "setup.sh has VERSION=$v but the tag is $GITHUB_REF_NAME"; exit 1; }
+      - name: Checksum of the archive install.sh downloads
+        run: |
+          url="https://codeload.github.com/${GITHUB_REPOSITORY}/tar.gz/${GITHUB_REF_NAME}"
+          curl -fsSL "$url" -o "vps-setup-${GITHUB_REF_NAME}.tar.gz"
+          sha256sum "vps-setup-${GITHUB_REF_NAME}.tar.gz" | tee SHA256SUMS
+          sum=$(cut -d' ' -f1 SHA256SUMS)
+          {
+            echo "Install this release and verify the download:"
+            echo
+            echo '```bash'
+            echo "curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${GITHUB_REF_NAME}/install.sh \\"
+            echo "  | sudo VPS_SETUP_REF=${GITHUB_REF_NAME} VPS_SETUP_SHA256=${sum} bash"
+            echo '```'
+            echo
+            echo "SHA256 (${GITHUB_REF_NAME}.tar.gz from codeload.github.com): \`${sum}\`"
+            echo
+            echo "Changes: see CHANGELOG.md."
+          } > notes.md
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md SHA256SUMS

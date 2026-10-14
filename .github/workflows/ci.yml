@@ -25,12 +25,22 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nginx openssl
+      - name: Install nginx, Apache and Caddy (without starting them) so every template is validated
+        run: |
+          printf '#!/bin/sh\nexit 101\n' | sudo tee /usr/sbin/policy-rc.d >/dev/null
+          sudo chmod +x /usr/sbin/policy-rc.d
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nginx apache2 openssl curl gnupg debian-keyring debian-archive-keyring apt-transport-https
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list >/dev/null
+          sudo apt-get update -qq && sudo apt-get install -y -qq caddy
+          sudo rm -f /usr/sbin/policy-rc.d
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
       - run: bash tests/secrets.sh   # passwords never reach the log, the screen or a command line
-      - run: bash tests/dry-run.sh   # syntax, i18n key coverage, every server x site type
-      - run: sudo env NO_LIVE=1 bash tests/templates.sh   # needs root: nginx -t opens /var/log/nginx
+      - run: bash tests/dry-run.sh   # syntax, i18n key coverage (en + id), every server x site type, uninstall
+      - run: bash tests/manage.sh    # list/remove sites, list/drop databases (stubs, no real system changes)
+      - run: sudo env NO_LIVE=1 bash tests/templates.sh   # nginx -t, apache2 -t and caddy validate
       - run: sudo bash tests/cloudflare.sh   # real-IP config vs the real nginx config tester
 
   integration:
@@ -68,28 +78,38 @@ jobs:
 
   # The tool claims Ubuntu, Debian and AlmaLinux/Rocky. These jobs run the non-destructive tests
   # inside each distro's own image (setup.sh picks modules/<family> from /etc/os-release).
-  # Experimental: failures are reported but do not block until the jobs have proven stable.
-  # debian:13 is not in os_check yet (it is reported as "untested"): once its jobs are green, add it there.
+  # Every supported release blocks the build. debian:13 is not in os_check yet (it is reported as
+  # "untested"), so it stays experimental until it is added there.
   distros:
     name: Tests on ${{ matrix.image }}
     runs-on: ubuntu-24.04
-    continue-on-error: true
+    continue-on-error: ${{ matrix.experimental }}
     container: ${{ matrix.image }}
     strategy:
       fail-fast: false
       matrix:
-        image: ["ubuntu:22.04", "debian:12", "debian:13", "almalinux:9", "rockylinux:9"]
+        include:
+          - { image: "ubuntu:22.04",  experimental: false }
+          - { image: "debian:12",     experimental: false }
+          - { image: "debian:13",     experimental: true }
+          - { image: "almalinux:8",   experimental: false }
+          - { image: "almalinux:9",   experimental: false }
+          - { image: "rockylinux:8",  experimental: false }
+          - { image: "rockylinux:9",  experimental: false }
     steps:
       - name: Install prerequisites
         run: |
           if command -v apt-get >/dev/null 2>&1; then
             apt-get update -qq
-            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bash procps iproute2 curl whiptail ca-certificates git sudo
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq bash procps iproute2 curl whiptail ca-certificates git sudo nginx openssl python3
           else
-            dnf install -y -q --allowerasing procps-ng iproute curl newt ca-certificates git sudo
+            dnf install -y -q --allowerasing procps-ng iproute curl newt ca-certificates git sudo nginx openssl python3 diffutils
           fi
       - uses: actions/checkout@v4
       - run: bash tests/unit.sh
       - run: bash tests/features.sh
       - run: bash tests/secrets.sh   # passwords never reach the log, the screen or a command line
       - run: bash tests/dry-run.sh
+      - run: bash tests/manage.sh
+      # This distro's own nginx validates the site templates (on RHEL: with vps-setup's fastcgi-php.conf)
+      - run: env NO_LIVE=1 bash tests/templates.sh

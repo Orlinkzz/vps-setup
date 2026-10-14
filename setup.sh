@@ -5,15 +5,16 @@
 # =============================================================================
 set -uo pipefail
 
-VERSION="0.6.2"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION="0.7.0"
+# readlink -f: also correct when started through the /usr/local/bin/vps-setup symlink
+ROOT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 export PATH="$PATH:/usr/sbin:/sbin:/usr/local/sbin"
 
 DRY_RUN=0
 ASSUME_YES=0
 LANG_CODE=""
 PRESET=""
-MANAGE=""          # list_sites | remove_domain | list_databases | drop_database (see lib/manage.sh)
+MANAGE=""          # list_sites | remove_domain | list_databases | drop_database | doctor | update | uninstall
 declare -a SELECTED=()
 declare -A PRESET_SET=()
 
@@ -25,6 +26,8 @@ source "$ROOT_DIR/lib/os.sh"
 source "$ROOT_DIR/lib/ui.sh"
 # shellcheck source=lib/manage.sh
 source "$ROOT_DIR/lib/manage.sh"
+# shellcheck source=lib/doctor.sh
+source "$ROOT_DIR/lib/doctor.sh"
 # shellcheck source=lib/i18n/en.sh
 source "$ROOT_DIR/lib/i18n/en.sh"
 
@@ -32,7 +35,7 @@ usage() {
   cat <<EOF
 VPS Setup $VERSION — set up a fresh Linux server step by step.
 
-Usage: sudo ./setup.sh [options]
+Usage: sudo vps-setup [options]        (or, from a cloned repo: sudo ./setup.sh [options])
 
 Options:
   --preset NAME     recommended | minimal | custom | domain | database | cloudflare (skips the first menu)
@@ -59,21 +62,26 @@ Options:
   --list-databases  List the PostgreSQL / MySQL databases, then exit
   --drop-database N Drop database N (a compressed dump is saved first); add --db-user U to drop
                     that user too, and --engine when both PostgreSQL and MySQL are installed
+                    (--remove-domain and --drop-database ask first; with --yes they do NOT ask)
+  --doctor          Read-only health check: SSH, firewall, services, certificates, backups
+  --update          Update vps-setup itself to the newest version
+  --uninstall       Remove what vps-setup configured (packages stay); asks first
   -v, --version     Print version
   -h, --help        Show this help
 
 Examples:
-  sudo ./setup.sh                          # guided, interactive
-  sudo ./setup.sh --lang id                # Bahasa Indonesia
-  sudo ./setup.sh --dry-run                # preview only
-  sudo ./setup.sh --yes --preset recommended --ssh-key "ssh-ed25519 AAAA..."
-  sudo ./setup.sh --add-domain             # add another website later
-  sudo ./setup.sh --yes --preset domain --domain app.example.com --site-type proxy --port 3000
-  sudo ./setup.sh --add-database           # create a database later
-  sudo ./setup.sh --yes --preset database --engine postgresql --db myapp
-  sudo ./setup.sh --list-sites
-  sudo ./setup.sh --remove-domain old.example.com --purge-files
-  sudo ./setup.sh --drop-database myapp --db-user myapp
+  sudo vps-setup                           # guided, interactive
+  sudo vps-setup --lang id                 # Bahasa Indonesia
+  sudo vps-setup --dry-run                 # preview only
+  sudo vps-setup --yes --preset recommended --ssh-key "ssh-ed25519 AAAA..."
+  sudo vps-setup --add-domain              # add another website later
+  sudo vps-setup --yes --preset domain --domain app.example.com --site-type proxy --port 3000
+  sudo vps-setup --add-database            # create a database later
+  sudo vps-setup --yes --preset database --engine postgresql --db myapp
+  sudo vps-setup --list-sites
+  sudo vps-setup --remove-domain old.example.com --purge-files
+  sudo vps-setup --drop-database myapp --db-user myapp
+  sudo vps-setup --doctor                  # is everything still healthy?
 EOF
 }
 
@@ -108,6 +116,9 @@ while (( $# )); do
     --keep-cert)      CFG[arg_keep_cert]=1 ;;
     --list-databases) MANAGE=list_databases ;;
     --drop-database)  [[ $# -ge 2 ]] || die "--drop-database needs a value"; MANAGE=drop_database; CFG[arg_manage]=$2; shift ;;
+    --doctor)         MANAGE=doctor ;;
+    --update)         MANAGE=update ;;
+    --uninstall)      MANAGE=uninstall ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
   shift
@@ -115,18 +126,85 @@ done
 
 # ------------------------------------------------------------------ preflight
 preflight_root() {
+  [[ $MANAGE == doctor ]] && return 0   # read-only: works without root (with a notice)
   if (( EUID != 0 && DRY_RUN == 0 )); then die "$(t err.root)"; fi
 }
+
+# --update: a git checkout pulls; an installed copy (curl | bash) is replaced by the newest release
+# of install.sh, which keeps state (/etc/vps-setup, /var/lib/vps-setup) untouched.
+self_update() {
+  local repo=${VPS_SETUP_REPO:-orlinkzz/vps-setup} ref=${VPS_SETUP_REF:-main}
+  if [[ -d $ROOT_DIR/.git ]] && command -v git >/dev/null 2>&1; then
+    log_info "$(t update.git "$ROOT_DIR")"
+    if (( DRY_RUN )); then log_dry "git -C $ROOT_DIR pull --ff-only"; return 0; fi
+    git -C "$ROOT_DIR" pull --ff-only || { log_err "$(t update.failed)"; return 1; }
+  else
+    log_info "$(t update.download "$repo@$ref" "$ROOT_DIR")"
+    if (( DRY_RUN )); then log_dry "install.sh from $repo@$ref into $ROOT_DIR"; return 0; fi
+    curl -fsSL "https://raw.githubusercontent.com/$repo/$ref/install.sh" \
+      | VPS_SETUP_DIR="$ROOT_DIR" VPS_SETUP_REF="$ref" VPS_SETUP_REPO="$repo" VPS_SETUP_NO_RUN=1 bash \
+      || { log_err "$(t update.failed)"; return 1; }
+  fi
+  log_ok "$(t update.done "$(bash "$ROOT_DIR/setup.sh" --version 2>/dev/null)")"
+}
+
+# Interactive "Manage" menu: the same commands as --list-sites, --remove-domain, ... without flags.
+manage_menu() {
+  local c out name title
+  title=$(t menu.manage.title)
+  while true; do
+    c=$(ui_menu "$title" "$(t menu.manage.text)" doctor \
+      doctor         "$(t menu.manage.doctor)" \
+      list_sites     "$(t menu.manage.list_sites)" \
+      remove_domain  "$(t menu.manage.remove_domain)" \
+      list_databases "$(t menu.manage.list_databases)" \
+      drop_database  "$(t menu.manage.drop_database)" \
+      back           "$(t menu.manage.back)") || return 0
+    case $c in
+      doctor|list_sites|list_databases)
+        out=$( { if [[ $c == doctor ]]; then doctor_main; else "$c"; fi; } 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+        ui_scroll "$title" "$out" ;;
+      remove_domain|drop_database)
+        if [[ $c == remove_domain ]]; then out=$(t menu.manage.ask_remove_domain); else out=$(t menu.manage.ask_drop_database); fi
+        name=$(ui_input "$title" "$out" "") || continue
+        [[ -n $name ]] || continue
+        clear
+        "$c" "$name"
+        read -r -p "$(t menu.manage.press_enter)" _ ;;
+      back) return 0 ;;
+    esac
+  done
+}
+
+# Two runs at the same time would fight over apt/dnf locks and half-written configs.
+acquire_lock() {
+  (( DRY_RUN )) && return 0
+  [[ $MANAGE == doctor ]] && return 0
+  command -v flock >/dev/null 2>&1 || return 0
+  # The braces keep "2>/dev/null" for this one line only; on "exec" itself it would hide stderr for good
+  { exec 9>/run/vps-setup.lock; } 2>/dev/null || return 0
+  flock -n 9 || die "$(t err.locked)"
+}
+
+# The per-feature state file can hold generated passwords: never leave it behind, also not on Ctrl-C.
+STATEF=""
+cleanup_on_exit() { [[ -n $STATEF ]] && rm -f "$STATEF"; return 0; }
+on_interrupt() { echo >&2; log_warn "$(t run.interrupted)"; exit 130; }
 
 ensure_whiptail() {
   (( ASSUME_YES )) && return 0
   command -v whiptail >/dev/null 2>&1 && return 0
-  command -v apt-get >/dev/null 2>&1 || die "$(t err.no_apt)"
   echo "Installing whiptail (needed for the menus)..."
   if (( EUID != 0 )); then die "$(t err.root)"; fi
-  DEBIAN_FRONTEND=noninteractive apt-get update -qq >>"$LOG_FILE" 2>&1
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq whiptail >>"$LOG_FILE" 2>&1 \
-    || die "Could not install whiptail (see $LOG_FILE)"
+  if command -v apt-get >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get update -qq >>"$LOG_FILE" 2>&1
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq whiptail >>"$LOG_FILE" 2>&1 \
+      || die "Could not install whiptail (see $LOG_FILE)"
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf -y -q install newt >>"$LOG_FILE" 2>&1 || die "Could not install whiptail (see $LOG_FILE)"
+  else
+    die "$(t err.no_apt)"
+  fi
 }
 
 choose_language() {
@@ -212,9 +290,13 @@ select_preset() {
       minimal "$(t menu.minimal)" \
       custom "$(t menu.custom)" \
       domain "$(t menu.domain)" \
+      database "$(t menu.database)" \
+      cloudflare "$(t menu.cloudflare)" \
+      manage "$(t menu.manage)" \
       help "$(t menu.help)" \
       quit "$(t menu.quit)") || quit_cancel
     case $choice in
+      manage) manage_menu ;;
       help) show_help ;;
       quit) quit_cancel ;;
       *) PRESET=$choice; return 0 ;;
@@ -305,7 +387,7 @@ run_features() {
     # Fitur berjalan di subshell, jadi nilai CFG yang diisi saat instalasi (port SSH akhir,
     # password MySQL, dll.) hilang begitu subshell selesai. Simpan ke file sementara (600)
     # lalu muat lagi supaya ringkasan/catatan akhir memakai nilai yang benar.
-    statef=$(mktemp)
+    statef=$(mktemp); STATEF=$statef
     ( set -e
       # shellcheck disable=SC2064
       trap "declare -p CFG >\"$statef\" 2>/dev/null" EXIT
@@ -315,7 +397,7 @@ run_features() {
       # shellcheck disable=SC1090
       source <(sed '1s/^declare -A/declare -gA/' "$statef")
     fi
-    rm -f "$statef"
+    rm -f "$statef"; STATEF=""
     case $rc in
       0)  RESULT[$id]=ok; state_mark "$id" ok ;;
       10) RESULT[$id]=skipped; state_mark "$id" skipped ;;
@@ -365,6 +447,12 @@ manage_main() {
   esac
   ui_init
   choose_language
+  case $MANAGE in
+    doctor)    doctor_main; return "$?" ;;
+    update)    self_update; return "$?" ;;
+    uninstall) local -a uargs=(); (( ASSUME_YES )) && uargs+=(--yes); (( DRY_RUN )) && uargs+=(--dry-run)
+               exec bash "$ROOT_DIR/lib/uninstall.sh" "${uargs[@]}" ;;
+  esac
   detect_os || die "$(t err.os_unsupported "unknown")"
   os_check || rc=$?
   case $rc in
@@ -385,6 +473,9 @@ manage_main() {
 # ------------------------------------------------------------------ main
 main() {
   preflight_root
+  trap cleanup_on_exit EXIT
+  trap on_interrupt INT TERM
+  acquire_lock
   if [[ -n $MANAGE ]]; then manage_main; return "$?"; fi
   if (( ASSUME_YES )) && [[ -z $PRESET ]]; then die "$(t err.yes_preset)"; fi
   ensure_whiptail

@@ -16,6 +16,12 @@ for k in $used; do
   grep -qF "MSG[$k]=" lib/i18n/en.sh || { echo "MISSING: $k"; fail=1; }
 done
 
+echo "== en.sh and id.sh define the same keys =="
+keys() { grep -oE '^MSG\[[^]]+\]' "$1" | sort -u; }
+if ! diff <(keys lib/i18n/en.sh) <(keys lib/i18n/id.sh) >/tmp/vps-keys.diff; then
+  echo "KEY MISMATCH (< only in en.sh, > only in id.sh):"; cat /tmp/vps-keys.diff; fail=1
+fi
+
 echo "== dry run: recommended =="
 bash ./setup.sh --yes --dry-run --preset recommended --lang en --ssh-key \
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl test@example" \
@@ -44,7 +50,13 @@ grep -q "ZTEST_VALUE=from-subshell" /tmp/vps-dry-z.out \
 rm -f "$ztest" presets/_z.list
 
 echo "== dry run: minimal (id) =="
-bash ./setup.sh --yes --dry-run --preset minimal --lang id >/tmp/vps-dry2.out 2>&1 || true
+bash ./setup.sh --yes --dry-run --preset minimal --lang id >/tmp/vps-dry2.out 2>&1 \
+  || { echo "dry run FAILED: minimal (id)"; tail -n 15 /tmp/vps-dry2.out; fail=1; }
+
+echo "== uninstall --dry-run changes nothing and finishes =="
+bash lib/uninstall.sh --dry-run >/tmp/vps-uninst.out 2>&1 && grep -q "^Done\." /tmp/vps-uninst.out \
+  && ! grep -q "^  removed: " /tmp/vps-uninst.out \
+  || { echo "uninstall dry run FAILED"; tail -n 15 /tmp/vps-uninst.out; fail=1; }
 
 printf 'webserver\nadd_domain\n' > presets/_wd.list
 printf 'webserver\ncloudflare\n' > presets/_cf.list

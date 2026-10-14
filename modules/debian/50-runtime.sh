@@ -14,6 +14,9 @@ _system_php_ver() {
   esac
 }
 
+# Only the distro's PHP is available, so there is nothing to ask.
+prompt_php_runtime() { CFG[php_ver]=$(_system_php_ver); }
+
 # No PPA on Debian: install the distro PHP directly instead of adding ondrej/php.
 run_php_runtime() {
   local ver ext

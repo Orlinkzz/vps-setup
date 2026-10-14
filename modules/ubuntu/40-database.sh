@@ -64,7 +64,7 @@ run_postgresql() {
   (( wm < 4 ))  && wm=4;  (( wm > 64 ))  && wm=64
   (( mwm < 64 )) && mwm=64; (( mwm > 512 )) && mwm=512
 
-  install -d -m 755 "$pg_conf"
+  run install -d -m 755 "$pg_conf"
   write_file "$pg_conf/vps-setup-tuning.conf" 644 <<EOF
 # Managed by vps-setup — RAM-based tuning
 shared_buffers = ${sb_128}MB
@@ -108,7 +108,7 @@ run_mysql() {
   if (( ! DRY_RUN )); then
     if [[ -e /root/.my.cnf ]]; then
       log_info "$(t db.mysql.keep_cnf)"
-    elif printf "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '%s';\n" "$root_pass" \
+    elif printf "ALTER USER 'root'@'localhost' IDENTIFIED WITH caching_sha2_password BY '%s';\n" "$root_pass" \
            | mysql 2>>"$LOG_FILE"; then
       write_file /root/.my.cnf 600 <<EOF
 # Managed by vps-setup: MySQL root login (keeps "sudo mysql" working)
@@ -126,19 +126,20 @@ EOF
   local bp=$(( MEM_MB * 25 / 100 / share ))  # innodb_buffer_pool
   (( bp < 64 )) && bp=64; (( bp > 4096 )) && bp=4096
 
-  install -d -m 755 "$MYSQL_CONF_D"
+  run install -d -m 755 "$MYSQL_CONF_D"
   write_file "$MYSQL_CONF_D/vps-setup-tuning.cnf" 644 <<EOF
 # Managed by vps-setup — RAM-based tuning
 [mysqld]
 innodb_buffer_pool_size = ${bp}M
 key_buffer_size = 32M
 max_allowed_packet = 64M
-query_cache_type = 0
 character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
 EOF
 
-  svc_enable_now mysql || svc_restart mysql
+  # The package already started mysqld with the old settings: always restart to apply ours
+  svc_enable_now mysql
+  svc_restart mysql
 
   log_ok "$(t db.mysql.done)"
 }
@@ -176,7 +177,11 @@ port 6379
 bind 127.0.0.1 -::1
 daemonize no
 supervised systemd
+pidfile /run/redis/redis-server.pid
 loglevel notice
+logfile /var/log/redis/redis-server.log
+dir /var/lib/redis
+dbfilename dump.rdb
 maxmemory ${maxmem}mb
 maxmemory-policy allkeys-lru
 save 900 1
@@ -188,7 +193,8 @@ timeout 0
 tcp-keepalive 300
 EOF
 
-  svc_enable_now redis-server || svc_restart redis-server
+  svc_enable_now redis-server
+  svc_restart redis-server
 
   log_ok "$(t db.redis.done)"
 }

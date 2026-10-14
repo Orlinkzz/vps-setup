@@ -14,7 +14,7 @@ register_feature frankenphp       runtime off
 _system_php_ver() {
   case "$OS_VERSION" in
     24.04) printf '8.3' ;;
-    22.04) printf '8.1' ;;
+    22.04) printf '8.3' ;;   # 22.04's own PHP 8.1 is end-of-life: 8.3 comes from ppa:ondrej/php
     *)     printf '8.3' ;;
   esac
 }
@@ -32,8 +32,9 @@ run_php_runtime() {
   local ver=${CFG[php_ver]:-$(_system_php_ver)} ext pkg
   log_info "$(t runtime.php.installing "$ver")"
 
-  # ondrej/php PPA for recent PHP versions
-  if ! pkg_installed "php${ver}-fpm"; then
+  # ondrej/php PPA only when the configured repositories do not offer this PHP version
+  # (Ubuntu 24.04 ships 8.3 itself; mixing in PPA builds of the same version causes upgrade churn).
+  if ! pkg_installed "php${ver}-fpm" && ! apt-cache show "php${ver}-fpm" >/dev/null 2>&1; then
     if ! pkg_installed software-properties-common; then pkg_install software-properties-common; fi
     run add-apt-repository -y ppa:ondrej/php
     pkg_update
@@ -142,6 +143,7 @@ run_docker_runtime() {
   fi
 
   pkg_install docker-compose-plugin
+  docker_bind_localhost
 
   # add deploy user to docker group if exists
   local u=${CFG[username]:-}
@@ -162,6 +164,23 @@ run_docker_runtime() {
 summary_docker_runtime() { t sum.docker; }
 notes_docker_runtime()   { t note.docker; echo; }
 
+# Docker writes its own iptables rules, so "-p 5432:5432" would be reachable from the internet even
+# with UFW/firewalld blocking that port. Make published ports listen on 127.0.0.1 by default; an
+# explicit "-p 0.0.0.0:8080:80" still exposes a port on purpose. An existing daemon.json is kept.
+docker_bind_localhost() {
+  if [[ -e /etc/docker/daemon.json ]]; then
+    grep -q '"ip"' /etc/docker/daemon.json 2>/dev/null || log_warn "$(t runtime.docker.daemon_kept)"
+    return 0
+  fi
+  run install -d -m 755 /etc/docker
+  write_file /etc/docker/daemon.json 644 <<'EOF'
+{
+  "ip": "127.0.0.1"
+}
+EOF
+  run systemctl restart docker
+}
+
 # ============================================================ FrankenPHP
 prompt_frankenphp() { return 0; }
 
@@ -177,6 +196,9 @@ run_frankenphp() {
     run_sh "curl -fsSL '$url' -o /tmp/frankenphp"
     run install -m 755 /tmp/frankenphp /usr/local/bin/frankenphp
   fi
+
+  # The service runs as www-data, which RHEL-family systems do not have by default
+  id -u www-data >/dev/null 2>&1 || run useradd -r -s /usr/sbin/nologin -d /var/www www-data
 
   # systemd service (requires a Caddyfile in /etc/frankenphp/)
   run install -d -m 755 /etc/frankenphp

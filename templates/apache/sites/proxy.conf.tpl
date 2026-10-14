@@ -8,8 +8,9 @@
 
     ProxyPreserveHost On
     ProxyRequests Off
-    RequestHeader set X-Forwarded-Proto "http"
-    RequestHeader set X-Forwarded-Port "80"
+    # Evaluated per request, so the copy certbot makes for the HTTPS vhost sends "https" / 443
+    RequestHeader set X-Forwarded-Proto expr=%{REQUEST_SCHEME}
+    RequestHeader set X-Forwarded-Port expr=%{SERVER_PORT}
 
     # WebSocket upgrade
     RewriteEngine On

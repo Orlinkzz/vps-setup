@@ -147,6 +147,8 @@ render() {
     echo "<IfModule mod_remoteip.c>"
     echo "  RemoteIPHeader CF-Connecting-IP"
     for ip in "${V4[@]}" "${V6[@]}" ${EXTRA[@]+"${EXTRA[@]}"}; do echo "  RemoteIPTrustedProxy $ip"; done
+    echo "  # %a = the visitor IP set by mod_remoteip (%h would still log Cloudflare's address)"
+    echo '  LogFormat "%a %l %u %t \"%r\" %>s %O \"%{Referer}i\" \"%{User-Agent}i\"" combined'
     echo "</IfModule>"
   fi
 }

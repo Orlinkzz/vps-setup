@@ -100,12 +100,21 @@ This project changes configuration on other people's servers, so we are strict a
 
 Before sending a pull request, test on a clean test server:
 
-1. **ShellCheck** is clean, with no new warnings.
+1. **ShellCheck** is clean, with no new warnings, and the automated tests pass:
+   `bash tests/unit.sh && bash tests/features.sh && bash tests/secrets.sh && bash tests/dry-run.sh && bash tests/manage.sh`
+   (no root needed; `tests/templates.sh` needs root and the web servers installed).
 2. **`--dry-run`** shows the right plan and does not change the system.
 3. **A normal run** works from start to finish.
 4. **Run it twice.** The result is the same and nothing breaks (idempotent).
-5. **Uninstall** cleans up everything you added.
-6. **Both languages** display correctly: also run with `--lang id`.
+5. **Uninstall** cleans up everything you added: add it to `lib/uninstall.sh` and check
+   `sudo vps-setup --uninstall --dry-run`.
+6. **Both languages** display correctly: also run with `--lang id`. Every key exists in both
+   `lib/i18n/en.sh` and `lib/i18n/id.sh` (the dry-run test fails otherwise).
+7. **Every distro family:** a change in `modules/ubuntu/` is inherited by Debian and AlmaLinux/Rocky.
+   Check that package names, service names, paths and SELinux still fit there (CI runs the tests in
+   AlmaLinux, Rocky and Debian containers).
+
+Add a line to `CHANGELOG.md` under the unreleased version.
 
 In your pull request description, state the distro and version you tested on.
 
@@ -135,7 +144,7 @@ One commit should be one logical change.
 
 ## Security
 
-Found a security vulnerability? **Please don't open a public issue.** Contact the maintainer privately through the [@Orlinkzz GitHub profile](https://github.com/Orlinkzz) or the *Report a vulnerability* feature in the repo's Security tab (if enabled), and allow time for a fix before disclosing publicly.
+Found a security vulnerability? **Please don't open a public issue.** See [SECURITY.md](SECURITY.md).
 
 ---
 

@@ -42,11 +42,12 @@ default_php_socket() {
   local s
   s=$(php_fpm_sockets | tail -n 1)
   if [[ -n $s ]]; then printf '%s' "$s"; return; fi
-  case "$OS_VERSION" in
-    24.04) printf '/run/php/php8.3-fpm.sock' ;;
-    *)     printf '/run/php/php8.1-fpm.sock' ;;
-  esac
+  # PHP is not installed yet: point at the version the PHP feature would install
+  printf '/run/php/php%s-fpm.sock' "$(_system_php_ver)"
 }
+
+# Group that owns website folders. Debian/Ubuntu web servers all run as www-data.
+web_group() { printf 'www-data'; }
 
 site_exists() {
   case "$1" in
@@ -246,19 +247,20 @@ summary_add_domain() {
 
 # ------------------------------------------------------------------ add_domain: run
 site_prepare() {  # site_prepare <domain> <type> <root>
-  local d=$1 type=$2 root=$3 app owner
+  local d=$1 type=$2 root=$3 app owner group
   app=/var/www/$d
   case "$type" in proxy|redirect) return 0 ;; esac
   owner=$(site_owner)
-  run install -d -m 755 -o "$owner" -g www-data "$app" || return 1
+  group=$(web_group)
+  run install -d -m 755 -o "$owner" -g "$group" "$app" || return 1
   case "$type" in
     static|spa|php)
-      run install -d -m 755 -o "$owner" -g www-data "$root" || return 1
+      run install -d -m 755 -o "$owner" -g "$group" "$root" || return 1
       if [[ -z $(ls -A "$root" 2>/dev/null) ]]; then
         local page
         page=$(render_tpl "$TPL_DIR/html/index.html.tpl" DOMAIN="$d" ROOT="$root") || return 1
         printf '%s\n' "$page" | write_file "$root/index.html" 644 || return 1
-        run chown "$owner:www-data" "$root/index.html" || return 1
+        run chown "$owner:$group" "$root/index.html" || return 1
       fi ;;
   esac
 }

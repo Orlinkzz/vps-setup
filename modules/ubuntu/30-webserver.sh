@@ -217,21 +217,25 @@ run_webserver_apache() {
   run systemctl enable apache2
 }
 
-run_webserver_caddy() {
-  local global="" catch body list=/etc/apt/sources.list.d/caddy-stable.list key=/usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  log_info "$(t web.installing Caddy)"
-  if ! command -v caddy >/dev/null 2>&1; then
-    pkg_install apt-transport-https curl gnupg ca-certificates
-    if [[ ! -f $key ]]; then
-      run_sh "set -o pipefail; curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o $key"
-    fi
-    if [[ ! -f $list ]]; then
-      run_sh "curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' -o $list"
-    fi
-    run chmod a+r "$key" "$list"
-    pkg_update
-    pkg_install caddy
+# Caddy's official apt repository (Debian/Ubuntu). RHEL-family systems override this.
+caddy_install_pkg() {
+  local list=/etc/apt/sources.list.d/caddy-stable.list key=/usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  pkg_install apt-transport-https curl gnupg ca-certificates
+  if [[ ! -f $key ]]; then
+    run_sh "set -o pipefail; curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor --yes -o $key"
   fi
+  if [[ ! -f $list ]]; then
+    run_sh "curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' -o $list"
+  fi
+  run chmod a+r "$key" "$list"
+  pkg_update
+  pkg_install caddy
+}
+
+run_webserver_caddy() {
+  local global="" catch body
+  log_info "$(t web.installing Caddy)"
+  if ! command -v caddy >/dev/null 2>&1; then caddy_install_pkg || return 1; fi
 
   [[ -n ${CFG[acme_email]:-} ]] && global=$'{\n    email '"${CFG[acme_email]}"$'\n}\n'
   if [[ ${CFG[web_catchall]:-page} == page ]]; then catch=catchall-page; ws_default_page; else catch=catchall-drop; fi

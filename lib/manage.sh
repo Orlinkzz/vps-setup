@@ -236,11 +236,11 @@ _db_is_system() {
   return 1
 }
 
-_psql() { ( cd / && sudo -u postgres psql -X -q "$@" ); }
+_psql() { ( cd / && runuser -u postgres -- psql -X -q "$@" ); }
 
 _dump_db() {  # _dump_db <engine> <database>  → SQL on stdout
   case "$1" in
-    postgresql) ( cd / && sudo -u postgres pg_dump "$2" ) ;;
+    postgresql) ( cd / && runuser -u postgres -- pg_dump "$2" ) ;;
     mysql)      mysqldump --single-transaction --routines --events "$2" ;;
   esac
 }

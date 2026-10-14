@@ -216,9 +216,25 @@ run_ssh_harden() {
     fi
   fi
 
-  # Open the new port in the firewall BEFORE SSH moves, if UFW is already active
+  # SELinux (AlmaLinux/Rocky): sshd may only bind ports labelled ssh_port_t, otherwise it fails to start
+  if [[ $port != 22 ]] && command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled; then
+    if ! command -v semanage >/dev/null 2>&1; then
+      log_err "$(t ssh.no_semanage "$port")"
+      (( DRY_RUN )) || rm -f "$SSH_DROPIN"
+      return 1
+    fi
+    if ! semanage port -l 2>/dev/null | awk '$1=="ssh_port_t"' | grep -qw "$port"; then
+      run semanage port -a -t ssh_port_t -p tcp "$port" || run semanage port -m -t ssh_port_t -p tcp "$port"
+    fi
+  fi
+
+  # Open the new port in the firewall BEFORE SSH moves, if a firewall is already active
   if [[ $port != "$cur" ]] && command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q '^Status: active'; then
     run ufw allow "${port}/tcp" comment 'SSH'
+  fi
+  if [[ $port != "$cur" ]] && command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+    run firewall-cmd --permanent --add-port="${port}/tcp"
+    run firewall-cmd --reload
   fi
 
   # Ubuntu 24.04 uses socket activation, which ignores "Port": switch to the plain service

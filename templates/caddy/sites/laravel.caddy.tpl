@@ -4,6 +4,14 @@
     encode zstd gzip
     import security_headers
     import hide_dotfiles
-    php_fastcgi unix/{{PHP_SOCKET_PATH}}
+    # Only the front controller runs; other .php files under public/ are never executed
+    @php_other {
+        path *.php
+        not path /index.php
+    }
+    respond @php_other 404
+    php_fastcgi unix/{{PHP_SOCKET_PATH}} {
+        index index.php
+    }
     file_server
 }
